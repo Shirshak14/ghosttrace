@@ -22,7 +22,7 @@ def client():
 
 @pytest.fixture()
 def auth_client(client):
-    r = client.post("/api/auth/register", json={"email": "dev@example.com", "password": "supersecret1", "full_name": "Dev"})
+    r = client.post("/api/auth/register", json={"email": "dev@example.com", "password": "supersecret1", "full_name": "Dev"})  # ghosttrace:ignore
     assert r.status_code == 201, r.text
     client.headers["Authorization"] = f"Bearer {r.json()['access_token']}"
     return client

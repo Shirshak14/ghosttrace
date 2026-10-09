@@ -6,9 +6,9 @@ def test_password_endpoint(auth_client, monkeypatch):
         return 52256179 if pw == "password" else 0
 
     monkeypatch.setattr("app.routers.breach.pwned_password_count", fake_count)
-    r = auth_client.post("/api/breach/password", json={"password": "password"}).json()
+    r = auth_client.post("/api/breach/password", json={"password": "password"}).json()  # ghosttrace:ignore
     assert r["pwned"] and r["strength_label"] == "Compromised"
-    r = auth_client.post("/api/breach/password", json={"password": "violet-anchor-quartz-meadow-71"}).json()
+    r = auth_client.post("/api/breach/password", json={"password": "violet-anchor-quartz-meadow-71"}).json()  # ghosttrace:ignore
     assert not r["pwned"] and r["strength"] >= 3
 
 

@@ -93,13 +93,13 @@ def build_pdf(user: User, findings: list[Finding], scans: list[Scan], title: str
         if f.in_history_only:
             loc += f" (history {f.commit_sha[:7] if f.commit_sha else ''})"
         rows.append([
-            Paragraph(f"<font color='{SEV[f.severity].hexval().replace('0x', '#')}'><b>{f.severity.upper()}</b></font>", st["cell"]),
+            Paragraph(f"<font size='7' color='{SEV[f.severity].hexval().replace('0x', '#')}'><b>{f.severity.upper()}</b></font>", st["cell"]),
             Paragraph(f"{f.risk_score:.0f}", st["cell"]),
             Paragraph(_esc(f.credential_type), st["cell"]),
             Paragraph(_esc(loc), st["mono"]),
             Paragraph(_esc(f.secret_masked), st["mono"]),
         ])
-    widths = [16 * mm, 11 * mm, 38 * mm, 63 * mm, 50 * mm]
+    widths = [20 * mm, 11 * mm, 36 * mm, 63 * mm, 48 * mm]
     ft = Table(rows, colWidths=widths, repeatRows=1)
     ft.setStyle(TableStyle([
         ("BACKGROUND", (0, 0), (-1, 0), INK), ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
