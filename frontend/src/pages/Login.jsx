@@ -40,6 +40,9 @@ export default function Login() {
         <Field label="Password">
           <input className="input" type="password" autoComplete="current-password" required value={password} onChange={(e) => setPassword(e.target.value)} />
         </Field>
+        <div className="-mt-3 text-right">
+          <Link to="/forgot-password" className="text-sm font-medium text-cyan hover:underline">Forgot password?</Link>
+        </div>
         {error && <div className="rounded-lg border border-sev-critical/30 bg-sev-critical/10 px-3 py-2 text-sm text-sev-critical">{error}</div>}
         <Button type="submit" loading={loading} className="w-full">Sign in</Button>
       </form>

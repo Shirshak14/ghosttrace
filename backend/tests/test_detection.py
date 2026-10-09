@@ -58,3 +58,20 @@ def test_skip_paths():
     assert should_skip_path("package-lock.json")
     assert should_skip_path("img/logo.png")
     assert not should_skip_path("src/.env")
+
+
+def test_code_references_are_not_secrets():
+    code = (
+        "secret = base64.b64decode(value)\n"
+        "api_key = request.query_params.get('k')\n"
+        "aws_secret_access_key=S3_SECRET_KEY,\n"
+        "password = Prompt.ask('pw')\n"
+    )
+    assert scan_text(code, path="app.py", include_emails=False) == []
+
+
+def test_real_literals_still_detected():
+    env = "DB_PASSWORD=Hq7rT2mVx9Lp4wZs\nSTRIPE_SECRET=Zk8Qw3Lm9Xv2Rt7Yp5Nc\n"
+    assert len(scan_text(env, path=".env", include_emails=False)) == 2
+    py = 'db_password = "Hq7rT2mVx9Lp4wZs"\n'
+    assert len(scan_text(py, path="settings.py", include_emails=False)) == 1

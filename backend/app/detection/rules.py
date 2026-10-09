@@ -104,7 +104,7 @@ RULES: list[Rule] = [
          _r(r"(?i)\b[\w.\-]*(?:password|passwd|pwd|passphrase|db_pass)\b['\"]?\s*(?:[:=]|=>)\s*['\"]([^'\"\s]{6,128})['\"]"), 1,
          specific=False, min_entropy=2.5),
     Rule("env_password", "Password in environment file", "password", "high",
-         _r(r"(?im)^\s*(?:export\s+)?[A-Z0-9_]*(?:PASSWORD|PASSWD|PASSPHRASE|_PWD|SECRET)[A-Z0-9_]*\s*=\s*['\"]?([^\s'\"#]{6,128})['\"]?\s*$"), 1,
+         _r(r"(?m)^\s*(?:export\s+)?[A-Z0-9_]*(?:PASSWORD|PASSWD|PASSPHRASE|_PWD|SECRET)[A-Z0-9_]*\s*=\s*['\"]?([^\s'\"#]{6,128})['\"]?\s*$"), 1,
          specific=False, min_entropy=2.5),
     Rule("generic_api_key", "Generic API key or secret", "api_key", "medium",
          _r(r"(?i)\b[\w.\-]*(?:api[_\-]?key|apikey|access[_\-]?token|auth[_\-]?token|client[_\-]?secret|secret[_\-]?key|app[_\-]?secret|private[_\-]?key)\b['\"]?\s*(?:[:=]|=>)\s*['\"]?([A-Za-z0-9_\-.+/=]{16,128})['\"]?"), 1,

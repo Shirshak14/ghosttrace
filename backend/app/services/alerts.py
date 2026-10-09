@@ -110,3 +110,30 @@ def alert_for_scan(db: Session, scan: Scan, findings: list[Finding]) -> Alert | 
     db.add(alert)
     db.commit()
     return alert
+
+
+def send_password_reset(user: User, token: str) -> bool:
+    """Email a reset link. Returns False if SMTP is not configured (the link is logged for local development)."""
+    link = f"{get_settings().frontend_url}/reset-password?token={token}"
+    text = (
+        "Someone asked to reset the password for your GhostTrace account.\n\n"
+        f"Choose a new password (link valid for 30 minutes): {link}\n\n"
+        "If this wasn't you, ignore this email; your password stays the same.\n"
+    )
+    body = f"""<div style="background:#050a14;padding:32px;font-family:Arial,sans-serif">
+<div style="max-width:560px;margin:0 auto;background:#08111f;border:1px solid #162a47;border-radius:12px;padding:28px">
+<div style="color:#22d3ee;font-family:monospace;font-size:12px;letter-spacing:2px">GHOSTTRACE</div>
+<h2 style="color:#fff;margin:10px 0 6px">Reset your password</h2>
+<p style="color:#9aabc4">Use the button below to choose a new password. The link is valid for 30 minutes.</p>
+<a href="{html.escape(link)}" style="display:inline-block;margin-top:14px;background:#22d3ee;color:#050a14;padding:11px 20px;border-radius:8px;font-weight:bold;text-decoration:none">Reset password</a>
+<p style="color:#6b7f9e;font-size:12px;margin-top:22px">If you didn't request this, ignore this email; your password stays the same.</p>
+</div></div>"""
+    try:
+        send_email(user.email, "Reset your GhostTrace password", text, body)
+        return True
+    except EmailNotConfigured:
+        log.warning("SMTP not configured. Password reset link for %s: %s", user.email, link)
+        return False
+    except Exception as exc:  # noqa: BLE001
+        log.warning("Password reset email failed: %s", exc)
+        return False

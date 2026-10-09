@@ -113,6 +113,26 @@ def is_placeholder(secret: str, line: str) -> bool:
     return bool(re.search(r"(?i)(process\.env|os\.environ|getenv\(|\$\{[A-Z_]+\})", line))
 
 
+CODE_EXT = {".py", ".js", ".jsx", ".ts", ".tsx", ".java", ".go", ".rb", ".php", ".cs", ".rs", ".kt", ".swift", ".c", ".cc", ".cpp", ".h", ".scala", ".lua", ".pl", ".sh"}
+
+
+def is_code_reference(secret: str, text: str, start: int, end: int, path: str | None) -> bool:
+    """True when a generic-rule 'secret' is really a variable, attribute or call, not a literal value."""
+    if any(c in secret for c in "()"):
+        return True
+    after = text[end:end + 3].lstrip(" 	")
+    if after[:1] in ("(", "["):
+        return True
+    quoted = start > 0 and text[start - 1] in "'\""
+    if quoted:
+        return False
+    # Unquoted value inside source code (not .env/.yml/.properties) is an identifier or expression, not a literal.
+    ext = ("." + path.rsplit(".", 1)[-1].lower()) if path and "." in path.rsplit("/", 1)[-1] else ""
+    if ext in CODE_EXT:
+        return True
+    return False
+
+
 def _line_starts(text: str) -> list[int]:
     starts = [0]
     for i, ch in enumerate(text):
@@ -151,6 +171,8 @@ def scan_text(text: str, path: str | None = None, include_emails: bool = True) -
             if rule.min_entropy and entropy < rule.min_entropy:
                 continue
             if rule.category == "email" and EMAIL_IGNORE_RE.search(secret):
+                continue
+            if not rule.specific and rule.category != "email" and is_code_reference(secret, text, s, e, path):
                 continue
             raw.append(Match(
                 rule=rule,
