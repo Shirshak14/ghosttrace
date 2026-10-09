@@ -51,6 +51,8 @@ def score(ctx: FindingContext, rule_name: str, file_path: str | None = None, sou
         exposure *= 0.85
     if ctx.sensitive_path:
         exposure = min(1.0, exposure + 0.05)
+    if ctx.test_path:
+        exposure *= 0.6  # test fixtures, examples and docs rarely hold live credentials
 
     if ctx.test_path:
         exposure *= 0.5  # fixtures, tests and docs rarely hold live credentials
