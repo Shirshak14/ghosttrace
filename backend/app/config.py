@@ -1,5 +1,8 @@
 from functools import lru_cache
 
+import os
+
+from pydantic import field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -15,6 +18,7 @@ class Settings(BaseSettings):
     # Auth
     secret_key: str = "change-me-in-production"
     access_token_minutes: int = 60 * 24
+    rate_limit_enabled: bool = True
 
     # CORS / links
     cors_origins: str = "http://localhost:5173"
@@ -42,6 +46,23 @@ class Settings(BaseSettings):
     # Monitoring scheduler
     monitor_interval_minutes: int = 60
     enable_scheduler: bool = True
+
+    @field_validator("database_url")
+    @classmethod
+    def _psycopg_driver(cls, v: str) -> str:
+        # Hosts hand out postgres:// or postgresql:// URLs; SQLAlchemy needs the psycopg driver named.
+        for prefix in ("postgres://", "postgresql://"):
+            if v.startswith(prefix):
+                return "postgresql+psycopg://" + v[len(prefix):]
+        return v
+
+    @model_validator(mode="after")
+    def _render_public_url(self):
+        # On Render the site's public URL is injected at runtime; use it for email links unless set explicitly.
+        public = os.environ.get("RENDER_EXTERNAL_URL")
+        if public and self.frontend_url == "http://localhost:5173":
+            self.frontend_url = public
+        return self
 
     @property
     def cors_origin_list(self) -> list[str]:

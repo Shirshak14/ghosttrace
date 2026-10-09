@@ -18,4 +18,5 @@ RUN python -m app.ml.train > /dev/null
 RUN useradd --create-home ghost && chown -R ghost /app
 USER ghost
 EXPOSE 8000
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--proxy-headers"]
+# $PORT is set by most hosts (Render, Railway); --forwarded-allow-ips lets rate limiting see the real client IP behind their proxy.
+CMD ["sh", "-c", "exec uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000} --proxy-headers --forwarded-allow-ips '*'"]
