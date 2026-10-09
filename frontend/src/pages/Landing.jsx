@@ -46,7 +46,7 @@ function TerminalMock() {
     { c: 'text-sev-high', t: '■ HIGH      postgres_url     api/.env.production       risk 79' },
     { c: 'text-sev-medium', t: '■ MEDIUM    jwt              tests/fixtures/auth.json  risk 41' },
     { c: 'text-sev-low', t: '■ LOW       email            README.md                 risk 12' },
-    { c: 'text-cyan', t: '✓ 5 findings · alert sent to security@acme-corp.dev' },
+    { c: 'text-cyan', t: '✓ 5 findings · alert sent to security@acme-corp.dev' }, // ghosttrace:ignore
   ]
   return (
     <div className="relative overflow-hidden rounded-2xl border border-ink-700 bg-ink-900/90 shadow-glow">

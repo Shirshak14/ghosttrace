@@ -13,8 +13,22 @@ MAX_FILE_BYTES = 1_000_000
 
 SKIP_DIRS = {
     "node_modules", "vendor", "dist", "build", ".git", "__pycache__", ".venv", "venv", "bower_components",
-    ".next", ".nuxt", "target", "coverage", ".gradle", "Pods",
+    ".next", ".nuxt", "target", "coverage", ".gradle", "Pods", "site-packages", "dist-packages", "third_party",
+    "third-party", "vendored",
 }
+# Files that list authors and licences: full of real but harmless email addresses.
+ATTRIBUTION_FILE_RE = re.compile(r"(?i)^(license|licence|copying|authors|contributors|notice|maintainers|credits|changelog|"
+                                 r"changes|history|metadata|pkg-info)([._\-].*)?$")
+CODE_EXT = {
+    ".py", ".js", ".jsx", ".ts", ".tsx", ".mjs", ".cjs", ".java", ".kt", ".go", ".rb", ".php", ".cs", ".rs", ".c", ".cc",
+    ".cpp", ".h", ".hpp", ".swift", ".scala", ".dart", ".lua", ".pl", ".r", ".vue", ".svelte", ".ipynb",
+}
+IGNORE_MARKER_RE = re.compile(r"(?i)(ghosttrace:ignore|gitleaks:allow|pragma: allowlist secret|nosecret)")
+# Values that are code, not secrets: function calls, collections, interpolation, env-var names, dotted references.
+CODE_VALUE_RE = re.compile(
+    r"[()\[\]{}]|[,;]$|^\$|^[A-Z][A-Z0-9]*(?:_[A-Z0-9]+)+$|^[A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)+$"
+)
+NON_SPECIFIC_CODE_CHECK = {"password_assignment", "env_password", "generic_api_key", "basic_auth_url"}
 SKIP_FILES = {
     "package-lock.json", "yarn.lock", "pnpm-lock.yaml", "poetry.lock", "Pipfile.lock", "composer.lock",
     "Cargo.lock", "go.sum", "Gemfile.lock", "bun.lockb",
@@ -37,7 +51,7 @@ SENSITIVE_PATH_RE = re.compile(r"(?i)(^|/)\.env(\.|$)|\.pem$|\.key$|id_rsa|id_ed
                                r"\.npmrc$|\.pypirc$|\.netrc$|\.git-credentials$|config\.(json|ya?ml)$|settings\.py$|\.tfvars$|"
                                r"docker-compose|\.properties$|wp-config\.php$")
 EMAIL_IGNORE_RE = re.compile(r"(?i)(@example\.(com|org|net)|@test\.|@localhost|noreply|no-reply|@users\.noreply\.github\.com|"
-                             r"@(domain|email|company|yourcompany|mail)\.com$|\.(png|jpg|gif|svg|css|js)$|@[0-9.]+$|^git@)")
+                             r"@(domain|email|company|yourcompany|yourdomain|mail)\.(com|org|net|io)$|\.(local|test|invalid|example|localhost)$|\.(png|jpg|gif|svg|css|js)$|@[0-9.]+$|^git@)")
 
 
 @dataclass
@@ -83,7 +97,7 @@ def mask_secret(secret: str, category: str = "") -> str:
 
 def should_skip_path(path: str) -> bool:
     parts = path.replace("\\", "/").split("/")
-    if any(p in SKIP_DIRS for p in parts[:-1]):
+    if any(p in SKIP_DIRS or p.endswith((".dist-info", ".egg-info")) for p in parts[:-1]):
         return True
     name = parts[-1]
     if name in SKIP_FILES or name.endswith((".min.js", ".min.css", ".map")):
@@ -104,7 +118,23 @@ def is_sensitive_path(path: str | None) -> bool:
     return bool(path and SENSITIVE_PATH_RE.search(path))
 
 
+def is_code_value(secret: str) -> bool:
+    return bool(CODE_VALUE_RE.search(secret))
+
+
+def valid_private_key(block: str) -> bool:
+    """A real PEM/OpenSSH key body is base64. Code that builds a key string (quotes, '+', join calls) is not."""
+    lines = block.replace("\\n", "\n").splitlines()
+    body = "".join(l.strip() for l in lines[1:-1] if ":" not in l)
+    if len(body) < 64:
+        return False
+    b64 = sum(c.isalnum() or c in "+/=" for c in body)
+    return b64 / len(body) >= 0.97
+
+
 def is_placeholder(secret: str, line: str) -> bool:
+    if re.search(r"(?i)passw|secret|token|api.?key", secret) and len(secret) < 20:
+        return True  # e.g. password = "Passwords", "my_secret_token"
     if PLACEHOLDER_RE.search(secret):
         return True
     if len(set(secret)) <= 3:
@@ -154,11 +184,18 @@ def _snippet(text: str, starts: list[int], line_idx: int, secret: str, category:
 def scan_text(text: str, path: str | None = None, include_emails: bool = True) -> list[Match]:
     if not text:
         return []
+    name = (path or "").replace("\\", "/").split("/")[-1]
+    if ATTRIBUTION_FILE_RE.match(name):
+        include_emails = False
+    dot = name.rfind(".")
+    is_code_file = dot != -1 and name[dot:].lower() in CODE_EXT
     starts = _line_starts(text)
     raw: list[Match] = []
     for rule in RULES:
         if rule.category == "email" and not include_emails:
             continue
+        if rule.id == "env_password" and is_code_file:
+            continue  # NAME=value lines in source code are assignments; password_assignment covers literals
         for m in rule.pattern.finditer(text):
             secret = m.group(rule.group)
             if not secret:
@@ -173,6 +210,14 @@ def scan_text(text: str, path: str | None = None, include_emails: bool = True) -
             if rule.category == "email" and EMAIL_IGNORE_RE.search(secret):
                 continue
             if not rule.specific and rule.category != "email" and is_code_reference(secret, text, s, e, path):
+                continue
+            if IGNORE_MARKER_RE.search(line_text):
+                continue
+            if rule.id in NON_SPECIFIC_CODE_CHECK and is_code_value(secret):
+                continue
+            if rule.id == "database_url" and re.search(r"[${}%]", secret):
+                continue
+            if rule.category == "private_key" and rule.id == "private_key" and not valid_private_key(secret):
                 continue
             raw.append(Match(
                 rule=rule,

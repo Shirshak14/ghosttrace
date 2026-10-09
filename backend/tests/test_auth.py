@@ -1,10 +1,10 @@
 def test_register_login_me(client):
-    r = client.post("/api/auth/register", json={"email": "A@Example.com", "password": "password123"})
+    r = client.post("/api/auth/register", json={"email": "A@Example.com", "password": "password123"})  # ghosttrace:ignore
     assert r.status_code == 201
     assert r.json()["user"]["email"] == "a@example.com"
 
     assert client.post("/api/auth/register", json={"email": "a@example.com", "password": "password123"}).status_code == 409
-    assert client.post("/api/auth/login", json={"email": "a@example.com", "password": "wrong-pass"}).status_code == 401
+    assert client.post("/api/auth/login", json={"email": "a@example.com", "password": "wrong-pass"}).status_code == 401  # ghosttrace:ignore
 
     token = client.post("/api/auth/login", json={"email": "a@example.com", "password": "password123"}).json()["access_token"]
     me = client.get("/api/auth/me", headers={"Authorization": f"Bearer {token}"})

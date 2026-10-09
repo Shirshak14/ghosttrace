@@ -23,6 +23,7 @@ Team: Tanmay Dabholkar, Shirshak Dange, Aayush Doke, Atharva Goim.
 | Dashboard | KPIs, exposure trend, severity and category breakdowns, risk distribution, most exposed repos, exposure timeline |
 | Triage | Search by org/user/repo/file, filter by severity and type, mark rotated or false positive (applies to every copy of the secret) |
 | Reports | PDF summary and per-scan reports, CSV export |
+| Noise control | Skips code expressions (`os.getenv(...)`, variable names, f-strings), vendored libraries (anything beside a `*.dist-info` folder), licence/author files, and any line marked `ghosttrace:ignore` or `gitleaks:allow`; test and docs paths score lower |
 | Privacy | Raw secrets are never stored; only a masked preview and a SHA-256 fingerprint |
 
 ## Stack
@@ -108,7 +109,7 @@ real-format secrets (random values in each provider's exact format, in `.env`, s
 that cause false positives in keyword scanners (documentation keys such as `AKIAIOSFODNN7EXAMPLE`, `${ENV}` references,
 `your-api-key-here`, low-entropy dummies, test fixtures). Every line runs through the real detection engine, so the
 model learns from the same features it sees in production. About 4% label noise is added so boundaries stay soft.
-Held-out accuracy is about 96% (ROC AUC ≈ 0.96). Retrain with `python -m app.ml.train`.
+Held-out accuracy is about 95% (ROC AUC ≈ 0.95). Retrain with `python -m app.ml.train`.
 
 Risk score = `100 × confidence^0.8 × impact(credential type) × exposure(public repo, sensitive file, history-only)`,
 mapped to critical (≥75), high (≥55), medium (≥30) and low.
