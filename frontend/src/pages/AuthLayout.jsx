@@ -1,10 +1,13 @@
 import Logo from '../components/Logo'
+import LetterGlitch from '../components/reactbits/LetterGlitch'
 
 export default function AuthLayout({ title, subtitle, children, footer }) {
   return (
     <div className="grid min-h-screen lg:grid-cols-2">
       <div className="relative hidden overflow-hidden border-r border-ink-800 bg-ink-900 lg:block">
-        <div className="grid-bg absolute inset-0" />
+        <div className="absolute inset-0 opacity-30">
+          <LetterGlitch glitchColors={['#0b1628', '#22d3ee', '#2f7bff']} glitchSpeed={70} outerVignette backgroundColor="#08111f" />
+        </div>
         <div className="absolute -left-20 top-1/3 h-96 w-96 rounded-full bg-signal/25 blur-[120px]" />
         <div className="absolute bottom-0 right-0 h-80 w-80 rounded-full bg-cyan/15 blur-[120px]" />
         <div className="relative flex h-full flex-col justify-between p-12">
