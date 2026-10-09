@@ -4,6 +4,7 @@ from sqlalchemy.orm import Session
 
 from ..db import get_db
 from ..models import User
+from ..ratelimit import rate_limit
 from ..schemas import ForgotPasswordIn, LoginIn, ResetPasswordIn, RegisterIn, TokenOut, UserOut, UserUpdate
 from ..security import (
     create_access_token, create_reset_token, get_current_user, hash_password, user_from_reset_token, verify_password,
@@ -13,7 +14,7 @@ from ..services.alerts import send_password_reset
 router = APIRouter(prefix="/api/auth", tags=["auth"])
 
 
-@router.post("/register", response_model=TokenOut, status_code=status.HTTP_201_CREATED)
+@router.post("/register", response_model=TokenOut, status_code=status.HTTP_201_CREATED, dependencies=[Depends(rate_limit("register", 5, 3600))])
 def register(body: RegisterIn, db: Session = Depends(get_db)) -> TokenOut:
     email = body.email.lower()
     if db.scalar(select(User).where(User.email == email)):
@@ -30,7 +31,7 @@ def register(body: RegisterIn, db: Session = Depends(get_db)) -> TokenOut:
     return TokenOut(access_token=create_access_token(user.id), user=UserOut.model_validate(user))
 
 
-@router.post("/login", response_model=TokenOut)
+@router.post("/login", response_model=TokenOut, dependencies=[Depends(rate_limit("login", 10, 300))])
 def login(body: LoginIn, db: Session = Depends(get_db)) -> TokenOut:
     user = db.scalar(select(User).where(User.email == body.email.lower()))
     if user is None or not verify_password(body.password, user.password_hash):
@@ -38,7 +39,7 @@ def login(body: LoginIn, db: Session = Depends(get_db)) -> TokenOut:
     return TokenOut(access_token=create_access_token(user.id), user=UserOut.model_validate(user))
 
 
-@router.post("/forgot-password", status_code=status.HTTP_202_ACCEPTED)
+@router.post("/forgot-password", status_code=status.HTTP_202_ACCEPTED, dependencies=[Depends(rate_limit("forgot", 5, 3600))])
 def forgot_password(body: ForgotPasswordIn, tasks: BackgroundTasks, db: Session = Depends(get_db)) -> dict:
     # Same response whether or not the account exists, so this can't be used to discover registered emails.
     user = db.scalar(select(User).where(User.email == body.email.lower()))
@@ -47,7 +48,7 @@ def forgot_password(body: ForgotPasswordIn, tasks: BackgroundTasks, db: Session 
     return {"message": "If an account exists for that email, a reset link is on its way."}
 
 
-@router.post("/reset-password")
+@router.post("/reset-password", dependencies=[Depends(rate_limit("reset", 10, 3600))])
 def reset_password(body: ResetPasswordIn, db: Session = Depends(get_db)) -> dict:
     user = user_from_reset_token(body.token, db)
     if user is None:

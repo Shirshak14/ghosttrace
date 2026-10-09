@@ -2,6 +2,7 @@ import os
 
 os.environ["DATABASE_URL"] = "sqlite:///./test_ghosttrace.db"
 os.environ["ENABLE_SCHEDULER"] = "false"
+os.environ["RATE_LIMIT_ENABLED"] = "false"
 os.environ["SECRET_KEY"] = "test-secret-key-that-is-long-enough-123"
 
 import pytest
