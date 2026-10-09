@@ -15,13 +15,24 @@ def reset_limits() -> None:
         _hits.clear()
 
 
+def client_ip(request: Request, hops: int) -> str:
+    """Client address for rate limiting. Each trusted proxy appends the address it saw to X-Forwarded-For,
+    so the entry `hops` from the right is the real client; anything left of it is client-supplied and spoofable."""
+    peer = request.client.host if request.client else "unknown"
+    if hops <= 0:
+        return peer
+    forwarded = [h.strip() for h in request.headers.get("x-forwarded-for", "").split(",") if h.strip()]
+    return forwarded[-hops] if len(forwarded) >= hops else peer
+
+
 def rate_limit(name: str, limit: int, window_seconds: int):
     """Per-client sliding-window limiter, used as a route dependency (in-memory, so per process)."""
 
     def dependency(request: Request) -> None:
-        if not get_settings().rate_limit_enabled:
+        settings = get_settings()
+        if not settings.rate_limit_enabled:
             return
-        client = request.client.host if request.client else "unknown"
+        client = client_ip(request, settings.trusted_proxy_hops)
         key, now = f"{name}:{client}", time.monotonic()
         with _lock:
             hits = _hits[key]

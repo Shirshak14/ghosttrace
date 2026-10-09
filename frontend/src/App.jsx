@@ -1,22 +1,22 @@
+import { lazy, Suspense } from 'react'
 import { Navigate, Route, Routes, useLocation } from 'react-router-dom'
 import { useAuth } from './lib/auth'
-import './lib/charts'
 import AppLayout from './components/AppLayout'
 import { PageLoader } from './components/ui'
-import Landing from './pages/Landing'
-import Login from './pages/Login'
-import Register from './pages/Register'
-import ForgotPassword from './pages/ForgotPassword'
-import ResetPassword from './pages/ResetPassword'
-import Dashboard from './pages/Dashboard'
-import Scans from './pages/Scans'
-import ScanDetail from './pages/ScanDetail'
-import Findings from './pages/Findings'
-import Breach from './pages/Breach'
-import Monitors from './pages/Monitors'
-import Alerts from './pages/Alerts'
-import Settings from './pages/Settings'
-import NotFound from './pages/NotFound'
+const Landing = lazy(() => import('./pages/Landing'))
+const Login = lazy(() => import('./pages/Login'))
+const Register = lazy(() => import('./pages/Register'))
+const ForgotPassword = lazy(() => import('./pages/ForgotPassword'))
+const ResetPassword = lazy(() => import('./pages/ResetPassword'))
+const Dashboard = lazy(() => import('./pages/Dashboard'))
+const Scans = lazy(() => import('./pages/Scans'))
+const ScanDetail = lazy(() => import('./pages/ScanDetail'))
+const Findings = lazy(() => import('./pages/Findings'))
+const Breach = lazy(() => import('./pages/Breach'))
+const Monitors = lazy(() => import('./pages/Monitors'))
+const Alerts = lazy(() => import('./pages/Alerts'))
+const Settings = lazy(() => import('./pages/Settings'))
+const NotFound = lazy(() => import('./pages/NotFound'))
 
 function RequireAuth({ children }) {
   const { user, loading } = useAuth()
@@ -33,24 +33,27 @@ function GuestOnly({ children }) {
 }
 
 export default function App() {
+  // Pages load on demand so the landing page doesn't download the dashboard's charts, and the app doesn't download the landing animations.
   return (
-    <Routes>
-      <Route path="/" element={<Landing />} />
-      <Route path="/login" element={<GuestOnly><Login /></GuestOnly>} />
-      <Route path="/register" element={<GuestOnly><Register /></GuestOnly>} />
-      <Route path="/forgot-password" element={<GuestOnly><ForgotPassword /></GuestOnly>} />
-      <Route path="/reset-password" element={<ResetPassword />} />
-      <Route path="/app" element={<RequireAuth><AppLayout /></RequireAuth>}>
-        <Route index element={<Dashboard />} />
-        <Route path="scans" element={<Scans />} />
-        <Route path="scans/:id" element={<ScanDetail />} />
-        <Route path="findings" element={<Findings />} />
-        <Route path="breach" element={<Breach />} />
-        <Route path="monitors" element={<Monitors />} />
-        <Route path="alerts" element={<Alerts />} />
-        <Route path="settings" element={<Settings />} />
-      </Route>
-      <Route path="*" element={<NotFound />} />
-    </Routes>
+    <Suspense fallback={<div className="min-h-screen"><PageLoader /></div>}>
+      <Routes>
+        <Route path="/" element={<Landing />} />
+        <Route path="/login" element={<GuestOnly><Login /></GuestOnly>} />
+        <Route path="/register" element={<GuestOnly><Register /></GuestOnly>} />
+        <Route path="/forgot-password" element={<GuestOnly><ForgotPassword /></GuestOnly>} />
+        <Route path="/reset-password" element={<ResetPassword />} />
+        <Route path="/app" element={<RequireAuth><AppLayout /></RequireAuth>}>
+          <Route index element={<Dashboard />} />
+          <Route path="scans" element={<Scans />} />
+          <Route path="scans/:id" element={<ScanDetail />} />
+          <Route path="findings" element={<Findings />} />
+          <Route path="breach" element={<Breach />} />
+          <Route path="monitors" element={<Monitors />} />
+          <Route path="alerts" element={<Alerts />} />
+          <Route path="settings" element={<Settings />} />
+        </Route>
+        <Route path="*" element={<NotFound />} />
+      </Routes>
+    </Suspense>
   )
 }

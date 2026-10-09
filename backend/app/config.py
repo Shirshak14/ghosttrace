@@ -19,6 +19,8 @@ class Settings(BaseSettings):
     secret_key: str = "change-me-in-production"
     access_token_minutes: int = 60 * 24
     rate_limit_enabled: bool = True
+    # Reverse proxies in front of the app that append to X-Forwarded-For (1 on Render, 0 when exposed directly).
+    trusted_proxy_hops: int = 0
 
     # CORS / links
     cors_origins: str = "http://localhost:5173"

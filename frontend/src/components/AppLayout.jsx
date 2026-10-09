@@ -1,8 +1,9 @@
-import { useState } from 'react'
+import { Suspense, useState } from 'react'
 import { NavLink, Outlet, useLocation } from 'react-router-dom'
 import clsx from 'clsx'
 import { Bell, LayoutDashboard, LogOut, Menu, PanelLeftClose, PanelLeftOpen, Radar, Settings, ShieldAlert, Eye, X, MailWarning } from 'lucide-react'
 import Logo from './Logo'
+import { PageLoader } from './ui'
 import { useAuth } from '../lib/auth'
 
 const NAV = [
@@ -111,7 +112,7 @@ export default function AppLayout() {
           <span className="text-sm font-semibold text-white">{current?.label || 'GhostTrace'}</span>
         </header>
         <main className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-10">
-          <Outlet />
+          <Suspense fallback={<PageLoader />}><Outlet /></Suspense>
         </main>
       </div>
     </div>

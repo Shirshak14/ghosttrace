@@ -20,6 +20,8 @@ services:
         generateValue: true
       - key: ENVIRONMENT
         value: production
+      - key: TRUSTED_PROXY_HOPS
+        value: "1"
       - key: GITHUB_TOKEN
         sync: false
       - key: SMTP_HOST
