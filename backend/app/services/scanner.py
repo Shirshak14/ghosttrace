@@ -55,10 +55,28 @@ def _update(db: Session, scan: Scan, **fields) -> None:
 
 # ---------------------------------------------------------------- GitHub
 
+def vendored_prefixes(paths) -> tuple[str, ...]:
+    """Directories that hold installed third-party packages (e.g. a Lambda 'package/' folder with pillow-*.dist-info).
+
+    Anything next to a *.dist-info or *.egg-info folder is library code, not the user's, so it is skipped.
+    """
+    prefixes: set[str] = set()
+    for path in paths:
+        parts = path.split("/")
+        for i, part in enumerate(parts[:-1]):
+            if part.endswith((".dist-info", ".egg-info")):
+                prefixes.add("/".join(parts[:i]) + "/" if i else "")
+                break
+    return tuple(p for p in prefixes if p)
+
 async def _scan_repo(gh: GitHubClient, repo: RepoInfo, include_history: bool, stats: ScanStats, progress_cb) -> None:
     settings = get_settings()
     tree = await gh.get_tree(repo)
-    files = [f for f in tree if not should_skip_path(f.path) and f.size <= MAX_FILE_BYTES]
+    vendored = vendored_prefixes(f.path for f in tree)
+    files = [
+        f for f in tree
+        if not should_skip_path(f.path) and f.size <= MAX_FILE_BYTES and not f.path.startswith(vendored)
+    ]
     # Sensitive-looking files first so they are always covered when the per-repo cap applies.
     files.sort(key=lambda f: (not is_sensitive_path(f.path), f.size))
     files = files[: settings.github_max_files_per_repo]

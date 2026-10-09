@@ -35,7 +35,7 @@ def test_text_scan_scores_and_triage(auth_client):
 def test_zip_upload_and_reports(auth_client):
     buf = io.BytesIO()
     with zipfile.ZipFile(buf, "w") as zf:
-        zf.writestr("proj/.env", "DATABASE_URL=postgres://svc:Hq7rT2mVx9Lp4wZs@pg.internal:5432/core\n")
+        zf.writestr("proj/.env", "DATABASE_URL=postgres://svc:Hq7rT2mVx9Lp4wZs@pg.internal:5432/core\n")  # ghosttrace:ignore
         zf.writestr("proj/node_modules/x.js", f"k='{AWS}'")
         zf.writestr("proj/logo.png", b"\x89PNG\x00\x00")
     r = auth_client.post("/api/scans/upload", files={"file": ("proj.zip", buf.getvalue(), "application/zip")})

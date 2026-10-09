@@ -51,6 +51,8 @@ def score(ctx: FindingContext, rule_name: str, file_path: str | None = None, sou
         exposure *= 0.85
     if ctx.sensitive_path:
         exposure = min(1.0, exposure + 0.05)
+    if ctx.test_path:
+        exposure *= 0.6  # test fixtures, examples and docs rarely hold live credentials
 
     risk = 100 * (confidence ** 0.8) * IMPACT.get(ctx.base_severity, 0.4) * exposure
     risk = round(max(0.0, min(100.0, risk)), 1)
