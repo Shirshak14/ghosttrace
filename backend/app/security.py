@@ -1,3 +1,4 @@
+import hashlib
 from datetime import datetime, timedelta, timezone
 
 import bcrypt
@@ -29,6 +30,34 @@ def create_access_token(user_id: int) -> str:
     settings = get_settings()
     expires = datetime.now(timezone.utc) + timedelta(minutes=settings.access_token_minutes)
     return jwt.encode({"sub": str(user_id), "exp": expires}, settings.secret_key, algorithm=ALGORITHM)
+
+
+RESET_TOKEN_MINUTES = 30
+
+
+def _pw_fingerprint(password_hash: str) -> str:
+    return hashlib.sha256(password_hash.encode()).hexdigest()[:16]
+
+
+def create_reset_token(user: User) -> str:
+    """Signed, short-lived, single-use: it embeds a fingerprint of the current password hash, so it stops
+    working as soon as the password changes. It has no `sub` claim, so it can never be used as a login token."""
+    expires = datetime.now(timezone.utc) + timedelta(minutes=RESET_TOKEN_MINUTES)
+    payload = {"uid": user.id, "pwf": _pw_fingerprint(user.password_hash), "purpose": "reset", "exp": expires}
+    return jwt.encode(payload, get_settings().secret_key, algorithm=ALGORITHM)
+
+
+def user_from_reset_token(token: str, db: Session) -> User | None:
+    try:
+        payload = jwt.decode(token, get_settings().secret_key, algorithms=[ALGORITHM])
+        if payload.get("purpose") != "reset":
+            return None
+        user = db.get(User, int(payload["uid"]))
+    except (jwt.PyJWTError, KeyError, ValueError):
+        return None
+    if user is None or payload.get("pwf") != _pw_fingerprint(user.password_hash):
+        return None
+    return user
 
 
 def get_current_user(
