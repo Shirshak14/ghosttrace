@@ -4,23 +4,25 @@ import { Bar, Doughnut } from 'react-chartjs-2'
 import { Activity, AlertOctagon, ArrowRight, FileDown, FolderGit2, Radar, ShieldAlert, ShieldCheck, MailWarning } from 'lucide-react'
 import { api, download } from '../lib/api'
 import { SERIES, SEV_COLORS, tooltip } from '../lib/charts'
-import { nf, timeAgo, TARGET_LABELS } from '../lib/format'
+import { timeAgo, TARGET_LABELS } from '../lib/format'
 import { Button, Card, CardHeader, EmptyState, PageHeader, PageLoader, StatusBadge } from '../components/ui'
 import FindingsTable from '../components/FindingsTable'
 import FindingDrawer from '../components/FindingDrawer'
 import { useAuth } from '../lib/auth'
 import { useToast } from '../components/Toast'
+import CountUp from '../components/reactbits/CountUp'
+import SpotlightCard from '../components/reactbits/SpotlightCard'
 
 function Kpi({ icon: Icon, label, value, hint, accent = 'text-cyan' }) {
   return (
-    <Card className="p-5">
+    <SpotlightCard spotlightColor="#22d3ee" className="p-5">
       <div className="flex items-center justify-between">
         <span className="text-xs font-medium uppercase tracking-wider text-ink-400">{label}</span>
         <Icon className={`h-4 w-4 ${accent}`} />
       </div>
-      <div className="mt-3 text-3xl font-bold tabular-nums text-white">{value}</div>
+      <div className="mt-3 text-3xl font-bold tabular-nums text-white"><CountUp to={value} duration={1.5} separator="," /></div>
       {hint && <div className="mt-1 text-xs text-ink-400">{hint}</div>}
-    </Card>
+    </SpotlightCard>
   )
 }
 
@@ -112,10 +114,10 @@ export default function Dashboard() {
       />
 
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
-        <Kpi icon={ShieldAlert} label="Open findings" value={nf.format(t.open)} hint={`${t.resolved} resolved · ${t.false_positives} false positives`} />
-        <Kpi icon={AlertOctagon} label="Critical" value={nf.format(t.critical_open)} hint={`${t.high_open} high severity`} accent="text-sev-critical" />
-        <Kpi icon={Activity} label="Avg. risk" value={t.avg_risk.toFixed(0)} hint="Across open findings, 0–100" accent="text-sev-medium" />
-        <Kpi icon={FolderGit2} label="Coverage" value={nf.format(t.files_scanned)} hint={`files · ${t.repositories} repos · ${t.scans} scans`} />
+        <Kpi icon={ShieldAlert} label="Open findings" value={t.open} hint={`${t.resolved} resolved · ${t.false_positives} false positives`} />
+        <Kpi icon={AlertOctagon} label="Critical" value={t.critical_open} hint={`${t.high_open} high severity`} accent="text-sev-critical" />
+        <Kpi icon={Activity} label="Avg. risk" value={Math.round(t.avg_risk)} hint="Across open findings, 0–100" accent="text-sev-medium" />
+        <Kpi icon={FolderGit2} label="Coverage" value={t.files_scanned} hint={`files · ${t.repositories} repos · ${t.scans} scans`} />
       </div>
 
       <div className="mt-4 grid gap-4 lg:grid-cols-3">

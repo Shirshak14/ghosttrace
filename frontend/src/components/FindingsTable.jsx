@@ -5,10 +5,10 @@ import { timeAgo } from '../lib/format'
 export default function FindingsTable({ items, onSelect, compact = false }) {
   return (
     <div className="scrollbar-thin overflow-x-auto">
-      <table className="w-full min-w-[720px] text-left text-sm">
+      <table className={`w-full text-left text-sm ${compact ? '' : 'min-w-[720px]'}`}>
         <thead>
           <tr className="border-b border-ink-800 text-[11px] uppercase tracking-wider text-ink-400">
-            <th className="px-5 py-3 font-medium">Severity</th>
+            <th className={`py-3 font-medium ${compact ? 'pl-4 pr-2' : 'px-5'}`}>Severity</th>
             <th className="px-3 py-3 font-medium">Credential</th>
             <th className="px-3 py-3 font-medium">Location</th>
             <th className="px-3 py-3 font-medium">Risk</th>
@@ -19,12 +19,12 @@ export default function FindingsTable({ items, onSelect, compact = false }) {
         <tbody>
           {items.map((f) => (
             <tr key={f.id} onClick={() => onSelect?.(f)} className="cursor-pointer border-b border-ink-800/60 transition hover:bg-ink-800/40">
-              <td className="px-5 py-3"><SeverityBadge severity={f.severity} /></td>
+              <td className={`py-3 ${compact ? 'pl-4 pr-2' : 'px-5'}`}><SeverityBadge severity={f.severity} /></td>
               <td className="px-3 py-3">
-                <div className="font-medium text-white">{f.credential_type}</div>
-                <div className="font-mono text-xs text-ink-400">{f.secret_masked}</div>
+                <div className="whitespace-nowrap font-medium text-white">{f.credential_type}</div>
+                <div className="max-w-[12rem] truncate font-mono text-xs text-ink-400" title={f.secret_masked}>{f.secret_masked}</div>
               </td>
-              <td className="max-w-xs px-3 py-3">
+              <td className={`px-3 py-3 ${compact ? 'max-w-[11rem]' : 'max-w-xs'}`}>
                 <div className="truncate font-mono text-xs text-ink-200" title={`${f.repository || ''}/${f.file_path || ''}`}>
                   {f.repository && <span className="text-ink-400">{f.repository}/</span>}{f.file_path}{f.line_number ? `:${f.line_number}` : ''}
                 </div>
