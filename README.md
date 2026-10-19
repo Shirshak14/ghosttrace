@@ -15,7 +15,7 @@ Team: Tanmay Dabholkar, Shirshak Dange, Aayush Doke, Atharva Goim.
 | Area | What it does |
 | --- | --- |
 | Detection | 49 rules: AWS, GCP, Azure, GitHub, GitLab, Stripe, OpenAI, Anthropic, Slack, Twilio, SendGrid, JWT, SSH/PEM keys, database URLs, hard-coded passwords, generic keys, emails and more, plus Shannon-entropy filtering |
-| Sources | GitHub API (users, orgs, repos, last N commits per repo), pasted text, file and `.zip` uploads |
+| Sources | GitHub API (users, orgs, repos, gists, last N commits per repo or revisions per gist), pasted text, file and `.zip` uploads |
 | AI risk scoring | Gradient-boosted classifier (scikit-learn) on 24 features: entropy, length, character mix, placeholder patterns, test/docs paths, sensitive files, history-only, rule type. Outputs confidence, a 0–100 risk score, severity and human-readable reasons |
 | Breach intel | Email lookups via [XposedOrNot](https://xposedornot.com) (free) or Have I Been Pwned (with an API key); password checks via Pwned Passwords k-anonymity, so the password never leaves the server |
 | Monitoring | Scheduled re-scans of GitHub targets and emails, alerting only on credentials or breaches not seen before |
@@ -36,7 +36,7 @@ frontend/          React app (landing page + dashboard)
 backend/app/
   detection/       rules.py (49 detectors), engine.py (matching, entropy, masking, diff scanning)
   sources/         github.py (async GitHub API client)
-  ml/              features.py, train.py, scorer.py (AI risk model)
+  ml/              features.py, train.py, collect_creddata.py, scorer.py (AI risk model)
   intel/           breach.py (XposedOrNot / HIBP / Pwned Passwords)
   services/        scanner, alerts, monitoring scheduler, PDF reports
   routers/         REST API
@@ -109,7 +109,13 @@ real-format secrets (random values in each provider's exact format, in `.env`, s
 that cause false positives in keyword scanners (documentation keys such as `AKIAIOSFODNN7EXAMPLE`, `${ENV}` references,
 `your-api-key-here`, low-entropy dummies, test fixtures). Every line runs through the real detection engine, so the
 model learns from the same features it sees in production. About 4% label noise is added so boundaries stay soft.
-Held-out accuracy is about 95% (ROC AUC ≈ 0.95). Retrain with `python -m app.ml.train`.
+
+On top of the generated lines, the model trains on real data: `app/ml/real_features.npz` holds 3,429 detector hits from
+256 real GitHub repositories, labelled true or false by the [Samsung CredData](https://github.com/Samsung/CredData)
+benchmark (Apache-2.0). Only numeric features are stored, never code or secrets, and
+`python -m app.ml.collect_creddata --creddata <checkout> --repos <scratch dir>` rebuilds the file. On repositories the
+model has not seen, ROC AUC is about 0.79 with this data and 0.71 without it; on the generated hold-out it is about 0.96.
+Retrain with `python -m app.ml.train`.
 
 Risk score = `100 × confidence^0.8 × impact(credential type) × exposure(public repo, sensitive file, history-only)`,
 mapped to critical (≥75), high (≥55), medium (≥30) and low.

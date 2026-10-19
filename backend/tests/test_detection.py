@@ -119,3 +119,14 @@ def test_vendored_packages_are_skipped():
     prefixes = vendored_prefixes(paths)
     assert prefixes == ("package/",)
     assert not "app.py".startswith(prefixes)
+
+
+def test_real_training_data_matches_feature_layout():
+    from app.ml.features import FEATURE_NAMES
+    from app.ml.train import load_real
+
+    real = load_real()
+    assert real is not None, "run python -m app.ml.collect_creddata after changing the features"
+    X, y, groups = real
+    assert X.shape[1] == len(FEATURE_NAMES) and len(X) == len(y) == len(groups) > 1000
+    assert 0.3 < y.mean() < 0.9
