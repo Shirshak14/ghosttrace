@@ -1,6 +1,7 @@
 """Async GitHub API client used by the scanner (repo listing, trees, file contents, commit diffs)."""
 
 import asyncio
+import re
 from dataclasses import dataclass
 from urllib.parse import quote
 
@@ -32,6 +33,24 @@ class TreeFile:
     path: str
     sha: str
     size: int
+
+
+@dataclass
+class GistFile:
+    filename: str
+    raw_url: str
+    size: int
+    content: str | None = None  # filled in when the API inlined it
+
+
+@dataclass
+class GistInfo:
+    id: str
+    owner: str
+    html_url: str
+    public: bool
+    files: list[GistFile]
+    updated_at: str | None = None
 
 
 @dataclass
@@ -161,6 +180,58 @@ class GitHubClient:
             if f.get("patch")
         ]
 
+    @staticmethod
+    def _gist(data: dict) -> GistInfo:
+        return GistInfo(
+            id=data["id"],
+            owner=(data.get("owner") or {}).get("login") or "anonymous",
+            html_url=data.get("html_url", f"https://gist.github.com/{data['id']}"),
+            public=bool(data.get("public", True)),
+            files=[
+                GistFile(filename=name, raw_url=f.get("raw_url", ""), size=f.get("size") or 0,
+                         content=None if f.get("truncated") else f.get("content"))
+                for name, f in (data.get("files") or {}).items()
+            ],
+            updated_at=data.get("updated_at"),
+        )
+
+    async def list_gists(self, owner: str, limit: int) -> list[GistInfo]:
+        """Public gists of a user, most recently updated first."""
+        gists: list[GistInfo] = []
+        page = 1
+        while len(gists) < limit and page <= 10:
+            resp = await self._get(f"{API}/users/{owner}/gists", {"per_page": 100, "page": page})
+            if resp.status_code == 404:
+                return []
+            self._raise_for(resp, f"Gists of {owner}")
+            batch = resp.json()
+            gists.extend(self._gist(g) for g in batch)
+            if len(batch) < 100:
+                break
+            page += 1
+        return gists[:limit]
+
+    async def get_gist(self, gist_id: str, revision: str | None = None) -> GistInfo:
+        url = f"{API}/gists/{gist_id}" + (f"/{revision}" if revision else "")
+        resp = await self._get(url)
+        self._raise_for(resp, f"Gist {gist_id}")
+        return self._gist(resp.json())
+
+    async def list_gist_revisions(self, gist_id: str, limit: int) -> list[str]:
+        """Revision SHAs, newest first (the first one is the current version)."""
+        resp = await self._get(f"{API}/gists/{gist_id}/commits", {"per_page": min(limit, 100)})
+        if resp.status_code != 200:
+            return []
+        return [c["version"] for c in resp.json()[:limit]]
+
+    async def get_gist_file(self, f: GistFile) -> bytes | None:
+        if f.content is not None:
+            return f.content.encode()
+        if not f.raw_url:
+            return None
+        resp = await self._get(f.raw_url)
+        return resp.content if resp.status_code == 200 else None
+
     async def rate_limit(self) -> dict:
         resp = await self._get(f"{API}/rate_limit")
         if resp.status_code != 200:
@@ -192,3 +263,24 @@ def parse_owner_target(target: str) -> str:
     if not owner:
         raise GitHubError("Enter a GitHub username or organization.")
     return owner
+
+
+GIST_ID_RE = re.compile(r"^[0-9a-f]{20,40}$", re.I)
+
+
+def parse_gist_target(target: str) -> str:
+    """Accepts a gist ID or a gist.github.com URL and returns the ID."""
+    t = target.strip().removesuffix("/").split("#")[0].split("?")[0]
+    gist_id = t.split("/")[-1].removesuffix(".git")
+    if not GIST_ID_RE.match(gist_id):
+        raise GitHubError("Enter a gist ID or a gist.github.com URL.")
+    return gist_id.lower()
+
+
+def parse_target(target_type: str, target: str) -> str:
+    """Normalize a scan or monitor target for its type."""
+    if target_type == "github_repo":
+        return parse_repo_target(target)
+    if target_type == "github_gist":
+        return parse_gist_target(target)
+    return parse_owner_target(target)

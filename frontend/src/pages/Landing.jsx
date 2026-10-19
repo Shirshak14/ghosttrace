@@ -16,7 +16,7 @@ import SpotlightCard from '../components/reactbits/SpotlightCard'
 import StarBorder from '../components/reactbits/StarBorder'
 
 const PIPELINE = [
-  { icon: Github, title: 'Public sources', text: 'GitHub users, orgs and repos, including commit history, plus pasted text and uploaded files.' },
+  { icon: Github, title: 'Public sources', text: 'GitHub users, orgs, repos and gists, including commit history, plus pasted text and uploaded files.' },
   { icon: Radar, title: 'Collection', text: 'Repository trees and diffs are pulled through the GitHub API and streamed to the engine.' },
   { icon: FileSearch, title: 'Detection', text: '40+ provider-specific rules plus Shannon-entropy analysis for unknown secrets.' },
   { icon: Brain, title: 'AI risk scoring', text: 'A trained model estimates whether each hit is a live secret and scores its blast radius.' },

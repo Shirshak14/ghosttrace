@@ -7,7 +7,7 @@ from ..models import Monitor, User
 from ..schemas import MonitorIn, MonitorOut, MonitorUpdate
 from ..security import get_current_user
 from ..services.monitoring import run_monitor
-from ..sources.github import GitHubError, parse_owner_target, parse_repo_target
+from ..sources.github import GitHubError, parse_target
 
 router = APIRouter(prefix="/api/monitors", tags=["monitors"])
 
@@ -18,7 +18,7 @@ def _normalize(body: MonitorIn) -> str:
             raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "Enter a valid email address.")
         return body.target.strip().lower()
     try:
-        return parse_repo_target(body.target) if body.target_type == "github_repo" else parse_owner_target(body.target)
+        return parse_target(body.target_type, body.target)
     except GitHubError as exc:
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, str(exc))
 

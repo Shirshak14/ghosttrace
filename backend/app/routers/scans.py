@@ -8,7 +8,7 @@ from ..schemas import FindingOut, GithubScanIn, ScanOut, TextScanIn
 from ..security import get_current_user
 from ..services.alerts import alert_for_scan
 from ..services.scanner import persist_hits, run_github_scan, scan_text_blob, scan_upload
-from ..sources.github import GitHubError, parse_owner_target, parse_repo_target
+from ..sources.github import GitHubError, parse_target
 
 router = APIRouter(prefix="/api/scans", tags=["scans"])
 MAX_UPLOAD = 20 * 1024 * 1024
@@ -39,7 +39,7 @@ def _complete_inline(db: Session, scan: Scan, stats) -> Scan:
 @router.post("/github", response_model=ScanOut, status_code=status.HTTP_202_ACCEPTED)
 def start_github_scan(body: GithubScanIn, tasks: BackgroundTasks, user: User = Depends(get_current_user), db: Session = Depends(get_db)) -> Scan:
     try:
-        target = parse_repo_target(body.target) if body.target_type == "github_repo" else parse_owner_target(body.target)
+        target = parse_target(body.target_type, body.target)
     except GitHubError as exc:
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, str(exc))
     active = db.scalar(select(func.count()).select_from(Scan).where(Scan.user_id == user.id, Scan.status.in_(["queued", "running"])))

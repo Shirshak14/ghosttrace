@@ -31,6 +31,8 @@ class Settings(BaseSettings):
     github_max_files_per_repo: int = 400
     github_max_repos_per_owner: int = 30
     github_max_commits_per_repo: int = 40
+    github_max_gists_per_user: int = 50
+    github_max_gist_revisions: int = 10
 
     # Email alerts (SMTP)
     smtp_host: str | None = None

@@ -56,7 +56,7 @@ class TokenOut(BaseModel):
 
 
 # ---- scans ----
-GithubTarget = Literal["github_user", "github_org", "github_repo"]
+GithubTarget = Literal["github_user", "github_org", "github_repo", "github_gist"]
 
 
 class GithubScanIn(BaseModel):
@@ -129,7 +129,7 @@ class FindingPage(BaseModel):
 
 # ---- monitors ----
 class MonitorIn(BaseModel):
-    target_type: Literal["github_user", "github_org", "github_repo", "email"]
+    target_type: Literal["github_user", "github_org", "github_repo", "github_gist", "email"]
     target: str = Field(min_length=1, max_length=300)
 
 

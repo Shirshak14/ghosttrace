@@ -79,5 +79,7 @@ def _score(ctx: FindingContext, rule_name: str, file_path: str | None, source: s
         factors.append("Removed from the latest code but still in git history")
     if source == "github":
         factors.append("Public repository" if ctx.public else "Private repository")
+    elif source == "gist":
+        factors.append("Public gist" if ctx.public else "Secret gist (anyone with the link can read it)")
     factors.append(f"AI confidence it is a real secret: {round(confidence * 100)}%")
     return Score(confidence=round(confidence, 4), risk=risk, severity=severity_for(risk), factors=factors)

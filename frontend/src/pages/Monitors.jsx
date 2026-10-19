@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import clsx from 'clsx'
-import { Building2, Eye, FolderGit2, Mail, Play, Trash2, User as UserIcon } from 'lucide-react'
+import { Building2, Eye, FileCode2, FolderGit2, Mail, Play, Trash2, User as UserIcon } from 'lucide-react'
 import { api } from '../lib/api'
 import { TARGET_LABELS, timeAgo } from '../lib/format'
 import { Button, Card, CardHeader, EmptyState, Field, PageHeader, PageLoader } from '../components/ui'
@@ -10,6 +10,7 @@ const TYPES = [
   { id: 'github_org', label: 'GitHub org', icon: Building2, placeholder: 'acme-corp' },
   { id: 'github_user', label: 'GitHub user', icon: UserIcon, placeholder: 'octocat' },
   { id: 'github_repo', label: 'Repository', icon: FolderGit2, placeholder: 'owner/repo' },
+  { id: 'github_gist', label: 'Gist', icon: FileCode2, placeholder: 'gist URL or ID' },
   { id: 'email', label: 'Email', icon: Mail, placeholder: 'security@company.com' },
 ]
 
@@ -60,7 +61,7 @@ export default function Monitors() {
       <div className="grid gap-6 lg:grid-cols-[360px_1fr]">
         <Card className="h-fit p-5">
           <form onSubmit={add} className="space-y-4">
-            <div className="grid grid-cols-2 gap-2">
+            <div className="grid grid-cols-3 gap-2">
               {TYPES.map(({ id, label, icon: Icon }) => (
                 <button type="button" key={id} onClick={() => setType(id)}
                   className={clsx('flex items-center gap-2 rounded-lg border px-3 py-2 text-xs transition',
