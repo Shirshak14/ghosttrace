@@ -9,9 +9,8 @@ from sqlalchemy import select
 from ..config import get_settings
 from ..db import SessionLocal
 from ..intel.breach import BreachLookupError
-from ..models import BreachCheck, Monitor, Scan, User
+from ..models import Alert, BreachCheck, Monitor, Scan, User
 from .alerts import EmailNotConfigured, send_email
-from ..models import Alert
 from .scanner import run_github_scan
 
 log = logging.getLogger("ghosttrace.monitoring")

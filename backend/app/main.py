@@ -41,7 +41,7 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-# The JS bundle is ~850 KB raw; gzip cuts it to roughly a quarter on slow hosts like Render's free plan.
+# Gzip cuts JS, CSS and JSON payloads to roughly a quarter, which matters on slow hosts like Render's free plan.
 app.add_middleware(GZipMiddleware, minimum_size=1024)
 
 for r in (auth, scans, findings, dashboard, breach, monitors, alerts, reports):
