@@ -50,7 +50,7 @@ class Scan(Base):
     id: Mapped[int] = mapped_column(primary_key=True)
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
     monitor_id: Mapped[int | None] = mapped_column(ForeignKey("monitors.id", ondelete="SET NULL"), nullable=True)
-    target_type: Mapped[str] = mapped_column(String(32))  # github_user | github_org | github_repo | text | file
+    target_type: Mapped[str] = mapped_column(String(32))  # github_user | github_org | github_repo | github_gist | text | file
     target: Mapped[str] = mapped_column(String(300))
     status: Mapped[str] = mapped_column(String(16), default="queued")  # queued | running | completed | failed
     progress: Mapped[int] = mapped_column(Integer, default=0)
@@ -81,7 +81,7 @@ class Finding(Base):
     # Raw secrets are never stored: only a masked preview and a SHA-256 fingerprint for de-duplication.
     secret_masked: Mapped[str] = mapped_column(String(200))
     fingerprint: Mapped[str] = mapped_column(String(64), index=True)
-    source_type: Mapped[str] = mapped_column(String(32))  # github | text | file
+    source_type: Mapped[str] = mapped_column(String(32))  # github | gist | text | file
     repository: Mapped[str | None] = mapped_column(String(300), nullable=True)
     file_path: Mapped[str | None] = mapped_column(String(1000), nullable=True)
     line_number: Mapped[int | None] = mapped_column(Integer, nullable=True)

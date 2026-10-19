@@ -1,8 +1,9 @@
-"""Scan orchestration: GitHub targets, pasted text and uploaded files."""
+"""Scan orchestration: GitHub repos and gists, pasted text and uploaded files."""
 
 import asyncio
 import io
 import logging
+import re
 import zipfile
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
@@ -18,7 +19,7 @@ from ..detection.engine import (
 from ..ml.features import FindingContext
 from ..ml.scorer import score_all
 from ..models import Finding, Scan
-from ..sources.github import GitHubClient, GitHubError, RepoInfo, parse_owner_target, parse_repo_target
+from ..sources.github import GitHubClient, GitHubError, GistInfo, RepoInfo, parse_gist_target, parse_owner_target, parse_repo_target
 
 log = logging.getLogger("ghosttrace.scanner")
 
@@ -38,6 +39,7 @@ class RawHit:
 @dataclass
 class ScanStats:
     repos: int = 0
+    gists: int = 0
     files: int = 0
     commits: int = 0
     hits: list[RawHit] = field(default_factory=list)
@@ -122,25 +124,87 @@ async def _scan_repo(gh: GitHubClient, repo: RepoInfo, include_history: bool, st
     stats.repos += 1
 
 
+async def _scan_gist(gh: GitHubClient, gist: GistInfo, include_history: bool, stats: ScanStats) -> None:
+    """Scan a gist's current files and, optionally, secrets that only survive in its earlier revisions."""
+    repository = f"{gist.owner}/gist:{gist.id[:8]}"
+    current: set[str] = set()
+
+    async def scan_files(g: GistInfo, revision: str | None) -> None:
+        for f in g.files:
+            if should_skip_path(f.filename) or f.size > MAX_FILE_BYTES:
+                continue
+            data = await gh.get_gist_file(f)
+            if data is None or looks_binary(data):
+                continue
+            if revision is None:
+                stats.files += 1
+            for m in scan_text(data.decode("utf-8", errors="ignore"), f.filename):
+                if revision is None:
+                    current.add(m.fingerprint)
+                elif m.fingerprint in current:
+                    continue
+                else:
+                    current.add(m.fingerprint)
+                url = f"{gist.html_url}/{revision}" if revision else f"{gist.html_url}#file-{re.sub(r'[^a-z0-9]+', '-', f.filename.lower())}"
+                stats.hits.append(RawHit(
+                    match=m, source_type="gist", repository=repository, file_path=f.filename, commit_sha=revision,
+                    url=url, public=gist.public, history_only=revision is not None,
+                ))
+
+    await scan_files(gist, None)
+    if include_history:
+        revisions = await gh.list_gist_revisions(gist.id, get_settings().github_max_gist_revisions)
+        for rev in revisions[1:]:  # the first revision is the current version
+            try:
+                await scan_files(await gh.get_gist(gist.id, rev), rev)
+            except GitHubError as exc:
+                log.warning("Skipping revision %s of gist %s: %s", rev, gist.id, exc)
+    stats.gists += 1
+
+
+async def _run_gists(db: Session, scan: Scan, gh: GitHubClient, gists: list[GistInfo], include_history: bool,
+                     stats: ScanStats, start: int, end: int) -> None:
+    for idx, gist in enumerate(gists):
+        _update(db, scan, message=f"Scanning gist {gist.id[:8]} ({idx + 1}/{len(gists)})",
+                progress=int(start + (end - start) * idx / max(len(gists), 1)))
+        try:
+            await _scan_gist(gh, gist, include_history, stats)
+        except GitHubError as exc:
+            log.warning("Skipping gist %s: %s", gist.id, exc)
+        scan.files_scanned = stats.files
+        db.commit()
+
+
 async def _run_github(db: Session, scan: Scan, include_history: bool) -> ScanStats:
     settings = get_settings()
     stats = ScanStats()
     async with GitHubClient() as gh:
+        if scan.target_type == "github_gist":
+            gist = await gh.get_gist(parse_gist_target(scan.target))
+            await _run_gists(db, scan, gh, [gist], include_history, stats, 5, 90)
+            return stats
+        gists: list[GistInfo] = []
         if scan.target_type == "github_repo":
             repos = [await gh.get_repo(parse_repo_target(scan.target))]
         else:
             owner = parse_owner_target(scan.target)
             kind = "org" if scan.target_type == "github_org" else "user"
             repos = await gh.list_repos(owner, kind, settings.github_max_repos_per_owner)
-            if not repos:
+            if kind == "user":
+                try:
+                    gists = await gh.list_gists(owner, settings.github_max_gists_per_user)
+                except GitHubError as exc:
+                    log.warning("Could not list gists of %s: %s", owner, exc)
+            if not repos and not gists:
                 _update(db, scan, message=f"No public repositories found for {owner}.")
+        repo_end = 75 if gists else 90
         total = max(len(repos), 1)
         for idx, repo in enumerate(repos):
-            _update(db, scan, message=f"Scanning {repo.full_name} ({idx + 1}/{len(repos)})", progress=int(5 + 85 * idx / total))
+            _update(db, scan, message=f"Scanning {repo.full_name} ({idx + 1}/{len(repos)})", progress=int(5 + (repo_end - 5) * idx / total))
 
             def cb(done: int, of: int, _idx=idx) -> None:
                 frac = min(done / of, 1.0) if of else 1.0
-                scan.progress = int(5 + 85 * (_idx + frac * 0.8) / total)
+                scan.progress = int(5 + (repo_end - 5) * (_idx + frac * 0.8) / total)
                 scan.files_scanned = stats.files
                 db.commit()
 
@@ -152,6 +216,8 @@ async def _run_github(db: Session, scan: Scan, include_history: bool) -> ScanSta
             scan.files_scanned = stats.files
             scan.commits_scanned = stats.commits
             db.commit()
+        if gists:
+            await _run_gists(db, scan, gh, gists, include_history, stats, repo_end, 90)
     return stats
 
 
@@ -237,6 +303,18 @@ def persist_hits(db: Session, scan: Scan, hits: list[RawHit]) -> list[Finding]:
     return findings
 
 
+def _summary(stats: ScanStats) -> str:
+    parts = []
+    if stats.repos or not stats.gists:
+        parts.append(f"{stats.repos} repos")
+    if stats.gists:
+        parts.append(f"{stats.gists} gist{'s' if stats.gists != 1 else ''}")
+    parts.append(f"{stats.files} files")
+    if stats.commits:
+        parts.append(f"{stats.commits} commits")
+    return "Scanned " + ", ".join(parts[:-1]) + " and " + parts[-1]
+
+
 def run_github_scan(scan_id: int, include_history: bool = True) -> None:
     """Background entry point. Opens its own DB session."""
     db = SessionLocal()
@@ -249,10 +327,7 @@ def run_github_scan(scan_id: int, include_history: bool = True) -> None:
             stats = asyncio.run(_run_github(db, scan, include_history))
             _update(db, scan, progress=95, message="Scoring findings with the AI model")
             findings = persist_hits(db, scan, stats.hits)
-            _update(
-                db, scan, status="completed", progress=100, finished_at=_now(),
-                message=f"Scanned {stats.repos} repos, {stats.files} files and {stats.commits} commits",
-            )
+            _update(db, scan, status="completed", progress=100, finished_at=_now(), message=_summary(stats))
             from .alerts import alert_for_scan
 
             alert_for_scan(db, scan, findings)

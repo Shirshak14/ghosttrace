@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import clsx from 'clsx'
-import { Building2, ClipboardPaste, FolderGit2, Trash2, Upload, User as UserIcon, Radar, FileArchive } from 'lucide-react'
+import { Building2, ClipboardPaste, FileCode2, FolderGit2, Trash2, Upload, User as UserIcon, Radar, FileArchive } from 'lucide-react'
 import { api } from '../lib/api'
 import { Github } from '../components/icons'
 import { TARGET_LABELS, timeAgo } from '../lib/format'
@@ -17,6 +17,7 @@ const GH_TYPES = [
   { id: 'github_repo', label: 'Repository', icon: FolderGit2, placeholder: 'owner/repo or https://github.com/owner/repo' },
   { id: 'github_user', label: 'User', icon: UserIcon, placeholder: 'GitHub username, e.g. torvalds' },
   { id: 'github_org', label: 'Organization', icon: Building2, placeholder: 'Organization name, e.g. acme-corp' },
+  { id: 'github_gist', label: 'Gist', icon: FileCode2, placeholder: 'Gist URL or ID, e.g. https://gist.github.com/user/1a2b3c…' },
 ]
 
 function NewScan({ onCreated }) {
@@ -74,7 +75,7 @@ function NewScan({ onCreated }) {
       <form onSubmit={submit} className="space-y-5 p-5">
         {mode === 'github' && (
           <>
-            <div className="grid grid-cols-3 gap-2">
+            <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
               {GH_TYPES.map(({ id, label: l, icon: Icon }) => (
                 <button
                   type="button"
@@ -93,7 +94,7 @@ function NewScan({ onCreated }) {
             <label className="flex cursor-pointer items-start gap-3 rounded-lg border border-ink-800 bg-ink-950/40 p-3">
               <input type="checkbox" className="mt-0.5 accent-cyan" checked={history} onChange={(e) => setHistory(e.target.checked)} />
               <span>
-                <span className="block text-sm text-white">Scan recent commit history</span>
+                <span className="block text-sm text-white">{ghType === 'github_gist' ? 'Scan earlier gist revisions' : 'Scan recent commit history'}</span>
                 <span className="block text-xs text-ink-400">Catches secrets that were committed and later deleted. They are still public.</span>
               </span>
             </label>

@@ -118,8 +118,8 @@ export default function FindingDrawer({ finding, onClose, onChange }) {
           <section className="rounded-lg border border-sev-high/30 bg-sev-high/5 p-4">
             <h3 className="text-sm font-semibold text-sev-high">How to fix it</h3>
             <p className="mt-1.5 text-sm text-ink-200">{REMEDIATION[f.category] || REMEDIATION.api_key}</p>
-            {f.source_type === 'github' && (
-              <p className="mt-2 text-sm text-ink-300">Deleting the file is not enough. The secret stays in git history until it is rotated.</p>
+            {(f.source_type === 'github' || f.source_type === 'gist') && (
+              <p className="mt-2 text-sm text-ink-300">Deleting the file is not enough. The secret stays in {f.source_type === 'gist' ? 'the gist\'s revision history' : 'git history'} until it is rotated.</p>
             )}
           </section>
 

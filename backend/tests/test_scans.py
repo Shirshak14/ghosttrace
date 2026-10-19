@@ -102,3 +102,43 @@ def test_github_errors_surface(auth_client, monkeypatch):
     r = auth_client.post("/api/scans/github", json={"target_type": "github_user", "target": "ghost-nobody"})
     scan = auth_client.get(f"/api/scans/{r.json()['id']}").json()
     assert scan["status"] == "failed" and "not found" in scan["error"]
+
+
+def test_gist_scan_with_revisions(auth_client, monkeypatch):
+    from app.sources import github as gh
+    from app.sources.github import GistFile, GistInfo
+
+    gid = "a1b2c3d4e5f60718293a4b5c6d7e8f90"
+    r3 = random.Random(5)
+    old_token = "ghp_" + "".join(r3.choice(string.ascii_letters + string.digits) for _ in range(36))
+    current = GistInfo(gid, "octo", f"https://gist.github.com/octo/{gid}", True, [GistFile("notes.md", "", 8, "# notes\n")])
+    older = GistInfo(gid, "octo", f"https://gist.github.com/octo/{gid}", True, [GistFile("deploy.sh", "", 60, f"export GITHUB_TOKEN={old_token}\n")])
+
+    async def get_gist(self, gist_id, revision=None):
+        return older if revision else current
+
+    async def revisions(self, gist_id, limit):
+        return ["rev2", "rev1"]
+
+    monkeypatch.setattr(gh.GitHubClient, "get_gist", get_gist)
+    monkeypatch.setattr(gh.GitHubClient, "list_gist_revisions", revisions)
+
+    r = auth_client.post("/api/scans/github", json={"target_type": "github_gist", "target": f"https://gist.github.com/octo/{gid}"})
+    assert r.status_code == 202, r.text
+    scan = auth_client.get(f"/api/scans/{r.json()['id']}").json()
+    assert scan["status"] == "completed", scan
+    assert scan["target"] == gid and scan["files_scanned"] == 1 and "1 gist" in scan["message"]
+    findings = auth_client.get(f"/api/scans/{scan['id']}/findings").json()
+    assert len(findings) == 1 and findings[0]["source_type"] == "gist" and findings[0]["in_history_only"] is True
+    assert old_token not in str(findings)
+
+
+def test_gist_target_parsing():
+    import pytest
+    from app.sources.github import GitHubError, parse_gist_target
+
+    gid = "a1b2c3d4e5f60718293a4b5c6d7e8f90"
+    assert parse_gist_target(f"https://gist.github.com/octo/{gid}") == gid
+    assert parse_gist_target(gid.upper()) == gid
+    with pytest.raises(GitHubError):
+        parse_gist_target("octocat")

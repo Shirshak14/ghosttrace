@@ -23,6 +23,7 @@ export const TARGET_LABELS = {
   github_user: 'GitHub user',
   github_org: 'GitHub org',
   github_repo: 'GitHub repo',
+  github_gist: 'GitHub gist',
   text: 'Pasted text',
   file: 'File upload',
   email: 'Email',
