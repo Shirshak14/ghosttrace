@@ -114,7 +114,8 @@ const LetterGlitch = ({
   };
 
   const drawLetters = () => {
-    if (!context.current || letters.current.length === 0) return;
+    // The ref is detached before the effect cleanup cancels the frame loop, so a frame can land in between.
+    if (!context.current || !canvasRef.current || letters.current.length === 0) return;
     const ctx = context.current;
     const { width, height } = canvasRef.current.getBoundingClientRect();
     ctx.clearRect(0, 0, width, height);
@@ -171,6 +172,7 @@ const LetterGlitch = ({
   };
 
   const animate = () => {
+    if (!canvasRef.current) return;
     const now = Date.now();
     if (now - lastGlitchTime.current >= glitchSpeed) {
       updateLetters();
@@ -207,6 +209,7 @@ const LetterGlitch = ({
     window.addEventListener('resize', handleResize);
 
     return () => {
+      clearTimeout(resizeTimeout);
       cancelAnimationFrame(animationRef.current);
       window.removeEventListener('resize', handleResize);
     };

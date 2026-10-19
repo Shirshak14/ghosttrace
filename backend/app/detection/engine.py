@@ -19,10 +19,7 @@ SKIP_DIRS = {
 # Files that list authors and licences: full of real but harmless email addresses.
 ATTRIBUTION_FILE_RE = re.compile(r"(?i)^(license|licence|copying|authors|contributors|notice|maintainers|credits|changelog|"
                                  r"changes|history|metadata|pkg-info)([._\-].*)?$")
-CODE_EXT = {
-    ".py", ".js", ".jsx", ".ts", ".tsx", ".mjs", ".cjs", ".java", ".kt", ".go", ".rb", ".php", ".cs", ".rs", ".c", ".cc",
-    ".cpp", ".h", ".hpp", ".swift", ".scala", ".dart", ".lua", ".pl", ".r", ".vue", ".svelte", ".ipynb",
-}
+NEWLINE_RE = re.compile("\n")
 IGNORE_MARKER_RE = re.compile(r"(?i)(ghosttrace:ignore|gitleaks:allow|pragma: allowlist secret|nosecret)")
 # Values that are code, not secrets: function calls, collections, interpolation, env-var names, dotted references.
 CODE_VALUE_RE = re.compile(
@@ -164,11 +161,7 @@ def is_code_reference(secret: str, text: str, start: int, end: int, path: str | 
 
 
 def _line_starts(text: str) -> list[int]:
-    starts = [0]
-    for i, ch in enumerate(text):
-        if ch == "\n":
-            starts.append(i + 1)
-    return starts
+    return [0, *(m.end() for m in NEWLINE_RE.finditer(text))]
 
 
 def _snippet(text: str, starts: list[int], line_idx: int, secret: str, category: str) -> str:

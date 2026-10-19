@@ -1,8 +1,7 @@
-import {
-  ArcElement, BarElement, CategoryScale, Chart as ChartJS, Filler, Legend, LinearScale, LineElement, PointElement, Tooltip,
-} from 'chart.js'
+import { ArcElement, BarElement, CategoryScale, Chart as ChartJS, Legend, LinearScale, Tooltip } from 'chart.js'
 
-ChartJS.register(ArcElement, BarElement, CategoryScale, LinearScale, LineElement, PointElement, Tooltip, Legend, Filler)
+// Only what the dashboard's bar and doughnut charts use, so the rest of Chart.js is tree-shaken away.
+ChartJS.register(ArcElement, BarElement, CategoryScale, LinearScale, Tooltip, Legend)
 ChartJS.defaults.font.family = '"IBM Plex Sans", system-ui, sans-serif'
 ChartJS.defaults.color = '#9aabc4'
 ChartJS.defaults.borderColor = 'rgba(58, 83, 120, 0.25)'

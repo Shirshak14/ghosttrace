@@ -16,7 +16,7 @@ from ..detection.engine import (
     MAX_FILE_BYTES, Match, is_sensitive_path, is_test_path, looks_binary, mask_secret, should_skip_path, scan_diff_patch, scan_text,
 )
 from ..ml.features import FindingContext
-from ..ml.scorer import score
+from ..ml.scorer import score_all
 from ..models import Finding, Scan
 from ..sources.github import GitHubClient, GitHubError, RepoInfo, parse_owner_target, parse_repo_target
 
@@ -190,33 +190,44 @@ def scan_upload(filename: str, data: bytes) -> ScanStats:
 
 def persist_hits(db: Session, scan: Scan, hits: list[RawHit]) -> list[Finding]:
     now = _now()
-    prior = {
-        f.fingerprint: f
-        for f in db.scalars(select(Finding).where(Finding.user_id == scan.user_id).order_by(Finding.first_seen.desc()))
+    # Only the columns needed to carry triage state and first-seen dates forward; the oldest row per fingerprint wins.
+    prior: dict[str, tuple[str, datetime]] = {
+        fp: (status, first_seen)
+        for fp, status, first_seen in db.execute(
+            select(Finding.fingerprint, Finding.status, Finding.first_seen)
+            .where(Finding.user_id == scan.user_id).order_by(Finding.first_seen.desc())
+        )
     }
-    findings: list[Finding] = []
+
+    unique: list[RawHit] = []
     seen: set[tuple[str, str | None]] = set()
     for h in hits:
+        key = (h.match.fingerprint, h.repository)
+        if key not in seen:
+            seen.add(key)
+            unique.append(h)
+
+    scores = score_all([
+        (FindingContext(
+            category=h.match.rule.category, base_severity=h.match.rule.severity, specific=h.match.rule.specific,
+            secret=h.match.secret, entropy=h.match.entropy, placeholder=h.match.placeholder, test_path=is_test_path(h.file_path),
+            sensitive_path=is_sensitive_path(h.file_path), history_only=h.history_only, line=h.match.snippet, public=h.public,
+        ), h.match.rule.name, h.file_path, h.source_type)
+        for h in unique
+    ])
+
+    findings: list[Finding] = []
+    for h, s in zip(unique, scores):
         m = h.match
-        key = (m.fingerprint, h.repository)
-        if key in seen:
-            continue
-        seen.add(key)
-        ctx = FindingContext(
-            category=m.rule.category, base_severity=m.rule.severity, specific=m.rule.specific, secret=m.secret,
-            entropy=m.entropy, placeholder=m.placeholder, test_path=is_test_path(h.file_path),
-            sensitive_path=is_sensitive_path(h.file_path), history_only=h.history_only, line=m.snippet, public=h.public,
-        )
-        s = score(ctx, m.rule.name, h.file_path, h.source_type)
-        previous = prior.get(m.fingerprint)
+        prev_status, prev_first_seen = prior.get(m.fingerprint, (None, None))
         f = Finding(
             user_id=scan.user_id, scan_id=scan.id, credential_type=m.rule.name, category=m.rule.category, rule_id=m.rule.id,
             secret_masked=mask_secret(m.secret, m.rule.category), fingerprint=m.fingerprint, source_type=h.source_type,
             repository=h.repository, file_path=h.file_path, line_number=m.line, commit_sha=h.commit_sha, url=h.url,
             snippet=m.snippet, in_history_only=h.history_only, entropy=m.entropy, confidence=s.confidence,
             risk_score=s.risk, severity=s.severity, risk_factors=s.factors,
-            status=previous.status if previous and previous.status == "false_positive" else "open",
-            first_seen=previous.first_seen if previous else now, last_seen=now,
+            status="false_positive" if prev_status == "false_positive" else "open",
+            first_seen=prev_first_seen or now, last_seen=now,
         )
         db.add(f)
         findings.append(f)
