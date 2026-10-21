@@ -40,10 +40,15 @@ def severity_for(risk: float) -> str:
     return "low"
 
 
-def score(ctx: FindingContext, rule_name: str, file_path: str | None = None, source: str = "github") -> Score:
-    features = np.array([extract(ctx)])
-    confidence = float(_model().predict_proba(features)[0][1])
+def score_all(items: list[tuple[FindingContext, str, str | None, str]]) -> list[Score]:
+    """Score (context, rule name, file path, source) tuples with one model call; per-row calls are ~100x slower."""
+    if not items:
+        return []
+    probs = _model().predict_proba(np.array([extract(ctx) for ctx, *_ in items]))[:, 1]
+    return [_score(ctx, rule_name, file_path, source, float(p)) for (ctx, rule_name, file_path, source), p in zip(items, probs)]
 
+
+def _score(ctx: FindingContext, rule_name: str, file_path: str | None, source: str, confidence: float) -> Score:
     exposure = 1.0 if ctx.public else 0.75
     if source in ("text", "file"):
         exposure = 0.8

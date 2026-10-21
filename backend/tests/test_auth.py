@@ -65,3 +65,20 @@ def test_auth_endpoints_are_rate_limited(client, monkeypatch):
     assert codes[:10] == [401] * 10
     assert codes[10] == 429
     reset_limits()
+
+
+def test_rate_limit_ignores_spoofed_forwarded_for(client, monkeypatch):
+    from app.config import get_settings
+    from app.ratelimit import reset_limits
+
+    monkeypatch.setattr(get_settings(), "rate_limit_enabled", True)
+    monkeypatch.setattr(get_settings(), "trusted_proxy_hops", 1)
+    reset_limits()
+    # The proxy appends the real address last; a fresh fake address on the left each time must not reset the limit.
+    codes = [
+        client.post("/api/auth/login", json={"email": "x@example.com", "password": "wrong-pass-1"},  # ghosttrace:ignore
+                    headers={"X-Forwarded-For": f"10.0.0.{i}, 203.0.113.7"}).status_code
+        for i in range(11)
+    ]
+    assert codes[10] == 429
+    reset_limits()

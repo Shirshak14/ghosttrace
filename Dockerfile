@@ -18,5 +18,6 @@ RUN python -m app.ml.train > /dev/null
 RUN useradd --create-home ghost && chown -R ghost /app
 USER ghost
 EXPOSE 8000
-# $PORT is set by most hosts (Render, Railway); --forwarded-allow-ips lets rate limiting see the real client IP behind their proxy.
-CMD ["sh", "-c", "exec uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000} --proxy-headers --forwarded-allow-ips '*'"]
+# $PORT is set by most hosts (Render, Railway). Client IPs behind a proxy come from TRUSTED_PROXY_HOPS (see app/ratelimit.py),
+# not --forwarded-allow-ips '*', which would trust the client-controlled left end of X-Forwarded-For.
+CMD ["sh", "-c", "exec uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000}"]

@@ -5,7 +5,7 @@ Each rule has a regex whose `group` captures the secret value. Provider-specific
 """
 
 import re
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
 
 @dataclass(frozen=True)
@@ -18,7 +18,6 @@ class Rule:
     group: int = 0
     specific: bool = True
     min_entropy: float = 0.0
-    keywords: tuple[str, ...] = field(default_factory=tuple)
 
 
 def _r(pattern: str, flags: int = 0) -> re.Pattern:
@@ -112,8 +111,6 @@ RULES: list[Rule] = [
     Rule("email_address", "Email address", "email", "low",
          _r(r"(?<![\w.+\-])([A-Za-z0-9._%+\-]{1,64}@(?:[A-Za-z0-9\-]+\.)+[A-Za-z]{2,24})\b"), 1, specific=False),
 ]
-
-RULES_BY_ID = {r.id: r for r in RULES}
 
 CATEGORY_LABELS = {
     "aws": "AWS credentials",

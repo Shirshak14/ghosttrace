@@ -2,7 +2,7 @@ from collections import Counter, defaultdict
 from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, Query
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from ..db import get_db
@@ -21,10 +21,21 @@ def _aware(dt: datetime) -> datetime:
 
 @router.get("/summary")
 def summary(days: int = Query(30, ge=7, le=365), user: User = Depends(get_current_user), db: Session = Depends(get_db)) -> dict:
-    findings = list(db.scalars(select(Finding).where(Finding.user_id == user.id)))
+    # Aggregate from a narrow column set: loading full rows (snippets, JSON factors) for every finding is the slow part.
+    findings = db.execute(
+        select(Finding.status, Finding.severity, Finding.category, Finding.risk_score, Finding.repository, Finding.first_seen)
+        .where(Finding.user_id == user.id)
+    ).all()
     open_f = [f for f in findings if f.status == "open"]
-    scans = list(db.scalars(select(Scan).where(Scan.user_id == user.id).order_by(Scan.created_at.desc())))
-    monitors = list(db.scalars(select(Monitor).where(Monitor.user_id == user.id)))
+    scan_count, files_scanned = db.execute(
+        select(func.count(Scan.id), func.coalesce(func.sum(Scan.files_scanned), 0)).where(Scan.user_id == user.id)
+    ).one()
+    recent_scans = db.scalars(select(Scan).where(Scan.user_id == user.id).order_by(Scan.created_at.desc()).limit(5))
+    top_findings = db.scalars(
+        select(Finding).where(Finding.user_id == user.id, Finding.status == "open")
+        .order_by(Finding.risk_score.desc(), Finding.id).limit(6)
+    )
+    monitors_active = db.scalar(select(func.count(Monitor.id)).where(Monitor.user_id == user.id, Monitor.enabled.is_(True)))
 
     latest_breach: dict[str, BreachCheck] = {}
     for b in db.scalars(select(BreachCheck).where(BreachCheck.user_id == user.id).order_by(BreachCheck.checked_at.desc())):
@@ -59,11 +70,11 @@ def summary(days: int = Query(30, ge=7, le=365), user: User = Depends(get_curren
             "high_open": sum(f.severity == "high" for f in open_f),
             "resolved": len(resolved),
             "false_positives": sum(f.status == "false_positive" for f in findings),
-            "scans": len(scans),
+            "scans": scan_count,
             "repositories": len({f.repository for f in findings if f.repository}),
-            "files_scanned": sum(s.files_scanned for s in scans),
+            "files_scanned": files_scanned,
             "avg_risk": round(sum(f.risk_score for f in open_f) / len(open_f), 1) if open_f else 0.0,
-            "monitors_active": sum(m.enabled for m in monitors),
+            "monitors_active": monitors_active,
             "breached_emails": sum(1 for b in latest_breach.values() if b.breach_count > 0),
             "exposure_score": exposure_score,
         },
@@ -75,8 +86,8 @@ def summary(days: int = Query(30, ge=7, le=365), user: User = Depends(get_curren
         "trend": [{"date": d, **v} for d, v in trend.items()],
         "risk_distribution": [{"bucket": f"{i * 10}-{i * 10 + 9 if i < 9 else 100}", "count": buckets.get(i, 0)} for i in range(10)],
         "top_repositories": top_repos,
-        "recent_scans": [ScanOut.model_validate(s).model_dump(mode="json") for s in scans[:5]],
-        "top_findings": [FindingOut.model_validate(f).model_dump(mode="json") for f in sorted(open_f, key=lambda f: -f.risk_score)[:6]],
+        "recent_scans": [ScanOut.model_validate(s).model_dump(mode="json") for s in recent_scans],
+        "top_findings": [FindingOut.model_validate(f).model_dump(mode="json") for f in top_findings],
     }
 
 
@@ -94,8 +105,9 @@ def timeline(limit: int = Query(60, le=300), user: User = Depends(get_current_us
                 "severity": None,
             })
     seen_fp: set[str] = set()
-    for f in db.scalars(select(Finding).where(Finding.user_id == user.id).order_by(Finding.first_seen.asc())):
-        if f.fingerprint in seen_fp or f.severity not in ("critical", "high"):
+    for f in db.scalars(select(Finding).where(Finding.user_id == user.id, Finding.severity.in_(("critical", "high")))
+                        .order_by(Finding.first_seen.asc())):
+        if f.fingerprint in seen_fp:
             continue
         seen_fp.add(f.fingerprint)
         events.append({
