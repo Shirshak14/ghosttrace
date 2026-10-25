@@ -2,6 +2,7 @@ import { lazy, Suspense } from 'react'
 import { Navigate, Route, Routes, useLocation } from 'react-router-dom'
 import { useAuth } from './lib/auth'
 import AppLayout from './components/AppLayout'
+import Backdrop from './components/Backdrop'
 import { PageLoader } from './components/ui'
 const Landing = lazy(() => import('./pages/Landing'))
 const Login = lazy(() => import('./pages/Login'))
@@ -35,6 +36,8 @@ function GuestOnly({ children }) {
 export default function App() {
   // Pages load on demand so the landing page doesn't download the dashboard's charts, and the app doesn't download the landing animations.
   return (
+    <>
+    <Backdrop />
     <Suspense fallback={<div className="min-h-screen"><PageLoader /></div>}>
       <Routes>
         <Route path="/" element={<Landing />} />
@@ -55,5 +58,6 @@ export default function App() {
         <Route path="*" element={<NotFound />} />
       </Routes>
     </Suspense>
+    </>
   )
 }

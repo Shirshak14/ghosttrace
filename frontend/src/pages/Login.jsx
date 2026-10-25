@@ -31,7 +31,7 @@ export default function Login() {
     <AuthLayout
       title="Welcome back"
       subtitle="Sign in to your GhostTrace workspace."
-      footer={<>New to GhostTrace? <Link to="/register" className="font-medium text-cyan hover:underline">Create an account</Link></>}
+      footer={<>New to GhostTrace? <Link to="/register" className="font-medium text-tint-light hover:underline">Create an account</Link></>}
     >
       <form onSubmit={submit} className="space-y-5">
         <Field label="Email">
@@ -41,9 +41,9 @@ export default function Login() {
           <input className="input" type="password" autoComplete="current-password" required value={password} onChange={(e) => setPassword(e.target.value)} />
         </Field>
         <div className="-mt-3 text-right">
-          <Link to="/forgot-password" className="text-sm font-medium text-cyan hover:underline">Forgot password?</Link>
+          <Link to="/forgot-password" className="text-sm font-medium text-tint-light hover:underline">Forgot password?</Link>
         </div>
-        {error && <div className="rounded-lg border border-sev-critical/30 bg-sev-critical/10 px-3 py-2 text-sm text-sev-critical">{error}</div>}
+        {error && <div className="rounded-3xl bg-ios-red/15 px-4 py-3 text-subhead text-ios-red">{error}</div>}
         <Button type="submit" loading={loading} className="w-full">Sign in</Button>
       </form>
     </AuthLayout>

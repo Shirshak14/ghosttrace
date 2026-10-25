@@ -28,7 +28,7 @@ export default function ForgotPassword() {
     <AuthLayout
       title="Forgot your password?"
       subtitle="Enter your email and we'll send you a link to choose a new one."
-      footer={<>Remembered it? <Link to="/login" className="font-medium text-cyan hover:underline">Back to sign in</Link></>}
+      footer={<>Remembered it? <Link to="/login" className="font-medium text-tint-light hover:underline">Back to sign in</Link></>}
     >
       {sent ? (
         <div className="rounded-lg border border-cyan/30 bg-cyan/10 px-4 py-3 text-sm text-ink-100">
@@ -39,7 +39,7 @@ export default function ForgotPassword() {
           <Field label="Email">
             <input className="input" type="email" autoComplete="email" required value={email} onChange={(e) => setEmail(e.target.value)} />
           </Field>
-          {error && <div className="rounded-lg border border-sev-critical/30 bg-sev-critical/10 px-3 py-2 text-sm text-sev-critical">{error}</div>}
+          {error && <div className="rounded-3xl bg-ios-red/15 px-4 py-3 text-subhead text-ios-red">{error}</div>}
           <Button type="submit" loading={loading} className="w-full">Send reset link</Button>
         </form>
       )}

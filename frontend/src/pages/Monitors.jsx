@@ -1,20 +1,20 @@
 import { useEffect, useState } from 'react'
-import clsx from 'clsx'
 import { Building2, Eye, FolderGit2, Mail, Play, Trash2, User as UserIcon } from 'lucide-react'
 import { api } from '../lib/api'
 import { TARGET_LABELS, timeAgo } from '../lib/format'
-import { Button, Card, CardHeader, EmptyState, Field, PageHeader, PageLoader } from '../components/ui'
-import { useToast } from '../components/Toast'
+import { Button, Card, EmptyState, Field, Group, PageHeader, PageLoader, Row, Segmented, Switch } from '../components/ui'
+import { useConfirm, useToast } from '../components/Toast'
 
 const TYPES = [
-  { id: 'github_org', label: 'GitHub org', icon: Building2, placeholder: 'acme-corp' },
-  { id: 'github_user', label: 'GitHub user', icon: UserIcon, placeholder: 'octocat' },
-  { id: 'github_repo', label: 'Repository', icon: FolderGit2, placeholder: 'owner/repo' },
-  { id: 'email', label: 'Email', icon: Mail, placeholder: 'security@company.com' },
+  { value: 'github_org', label: 'Org', icon: Building2, placeholder: 'acme-corp' },
+  { value: 'github_user', label: 'User', icon: UserIcon, placeholder: 'octocat' },
+  { value: 'github_repo', label: 'Repo', icon: FolderGit2, placeholder: 'owner/repo' },
+  { value: 'email', label: 'Email', icon: Mail, placeholder: 'security@company.com' },
 ]
 
 export default function Monitors() {
   const toast = useToast()
+  const confirm = useConfirm()
   const [items, setItems] = useState(null)
   const [type, setType] = useState('github_org')
   const [target, setTarget] = useState('')
@@ -48,61 +48,47 @@ export default function Monitors() {
   }
 
   async function remove(m) {
-    if (!window.confirm(`Stop monitoring ${m.target}?`)) return
+    if (!(await confirm({ title: 'Stop monitoring?', message: m.target, confirmLabel: 'Stop', destructive: true }))) return
     await api(`/api/monitors/${m.id}`, { method: 'DELETE' })
     setItems((x) => x.filter((y) => y.id !== m.id))
   }
 
-  const t = TYPES.find((x) => x.id === type)
+  const t = TYPES.find((x) => x.value === type)
   return (
     <>
-      <PageHeader eyebrow="Continuous" title="Monitors" description="GhostTrace re-scans monitored targets every hour and emails you when a new credential or breach appears." />
+      <PageHeader title="Monitoring" description="GhostTrace re-scans monitored targets every hour and emails you when a new credential or breach appears." />
       <div className="grid gap-6 lg:grid-cols-[360px_1fr]">
         <Card className="h-fit p-5">
           <form onSubmit={add} className="space-y-4">
-            <div className="grid grid-cols-2 gap-2">
-              {TYPES.map(({ id, label, icon: Icon }) => (
-                <button type="button" key={id} onClick={() => setType(id)}
-                  className={clsx('flex items-center gap-2 rounded-lg border px-3 py-2 text-xs transition',
-                    type === id ? 'border-cyan/60 bg-cyan/10 text-cyan' : 'border-ink-700 text-ink-300 hover:border-ink-500')}>
-                  <Icon className="h-4 w-4" /> {label}
-                </button>
-              ))}
-            </div>
+            <Segmented options={TYPES} value={type} onChange={setType} size="sm" />
             <Field label="Target"><input className="input font-mono" required value={target} onChange={(e) => setTarget(e.target.value)} placeholder={t.placeholder} /></Field>
             <Button type="submit" loading={busy} className="w-full"><Eye className="h-4 w-4" /> Start monitoring</Button>
           </form>
         </Card>
-        <Card>
-          <CardHeader title="Active monitors" />
-          {!items ? <PageLoader /> : items.length === 0 ? (
-            <EmptyState icon={Eye} title="Nothing monitored yet">Add your GitHub organization or team emails to get alerted on new leaks.</EmptyState>
-          ) : (
-            <ul className="divide-y divide-ink-800">
-              {items.map((m) => {
-                const Icon = (TYPES.find((x) => x.id === m.target_type) || TYPES[0]).icon
-                return (
-                  <li key={m.id} className="flex flex-col gap-3 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
-                    <div className="flex items-center gap-3">
-                      <div className="rounded-lg border border-ink-700 bg-ink-950 p-2"><Icon className="h-4 w-4 text-cyan" /></div>
-                      <div>
-                        <div className="font-mono text-sm text-white">{m.target}</div>
-                        <div className="text-xs text-ink-400">{TARGET_LABELS[m.target_type]} · last run {timeAgo(m.last_run_at)}</div>
-                      </div>
+        {!items ? <PageLoader /> : items.length === 0 ? (
+          <Card><EmptyState icon={Eye} title="Nothing monitored yet">Add your GitHub organization or team emails to get alerted on new leaks.</EmptyState></Card>
+        ) : (
+          <Group header="Active monitors">
+            {items.map((m) => {
+              const icon = (TYPES.find((x) => x.value === m.target_type) || TYPES[0]).icon
+              return (
+                <Row
+                  key={m.id}
+                  icon={icon}
+                  title={<span className="font-mono text-callout">{m.target}</span>}
+                  subtitle={`${TARGET_LABELS[m.target_type]} · last run ${timeAgo(m.last_run_at)}`}
+                  trailing={
+                    <div className="flex items-center gap-1.5">
+                      <Button variant="ghost" size="sm" onClick={() => runNow(m)} aria-label="Run now"><Play className="h-3.5 w-3.5" /><span className="hidden sm:inline">Run now</span></Button>
+                      <button onClick={() => remove(m)} className="press rounded-full p-2 text-label-3 hover:bg-white/10 hover:text-ios-red" aria-label="Delete monitor"><Trash2 className="h-4 w-4" /></button>
+                      <Switch checked={m.enabled} onChange={() => toggle(m)} label="Toggle monitor" />
                     </div>
-                    <div className="flex items-center gap-2">
-                      <button onClick={() => toggle(m)} className={clsx('relative h-5 w-9 rounded-full transition', m.enabled ? 'bg-cyan' : 'bg-ink-700')} aria-label="Toggle monitor">
-                        <span className={clsx('absolute top-0.5 h-4 w-4 rounded-full bg-white transition', m.enabled ? 'left-[18px]' : 'left-0.5')} />
-                      </button>
-                      <Button variant="ghost" size="sm" onClick={() => runNow(m)}><Play className="h-3.5 w-3.5" /> Run now</Button>
-                      <button onClick={() => remove(m)} className="rounded-md p-1.5 text-ink-500 hover:bg-ink-800 hover:text-sev-critical" aria-label="Delete monitor"><Trash2 className="h-4 w-4" /></button>
-                    </div>
-                  </li>
-                )
-              })}
-            </ul>
-          )}
-        </Card>
+                  }
+                />
+              )
+            })}
+          </Group>
+        )}
       </div>
     </>
   )

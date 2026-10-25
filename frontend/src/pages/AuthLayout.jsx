@@ -1,43 +1,26 @@
-import Logo from '../components/Logo'
-import LetterGlitch from '../components/reactbits/LetterGlitch'
+import { GhostMark } from '../components/Logo'
+import { Link } from 'react-router-dom'
+import { motion } from 'motion/react'
 
 export default function AuthLayout({ title, subtitle, children, footer }) {
   return (
-    <div className="grid min-h-screen lg:grid-cols-2">
-      <div className="relative hidden overflow-hidden border-r border-ink-800 bg-ink-900 lg:block">
-        <div className="absolute inset-0 opacity-30">
-          <LetterGlitch glitchColors={['#0b1628', '#22d3ee', '#2f7bff']} glitchSpeed={70} outerVignette backgroundColor="#08111f" />
+    <div className="flex min-h-dvh flex-col items-center justify-center px-4 py-12">
+      <motion.div
+        className="w-full max-w-[400px]"
+        initial={{ opacity: 0, y: 24, scale: 0.98 }}
+        animate={{ opacity: 1, y: 0, scale: 1 }}
+        transition={{ type: 'spring', stiffness: 260, damping: 28 }}
+      >
+        <div className="mb-7 flex flex-col items-center text-center">
+          <Link to="/" className="rounded-[22px]" aria-label="GhostTrace home">
+            <GhostMark className="h-[72px] w-[72px] drop-shadow-[0_12px_30px_rgba(255,255,255,0.15)]" />
+          </Link>
+          <h1 className="mt-5 text-title1 text-label">{title}</h1>
+          {subtitle && <p className="mt-1.5 text-callout text-label-2">{subtitle}</p>}
         </div>
-        <div className="absolute -left-20 top-1/3 h-96 w-96 rounded-full bg-signal/25 blur-[120px]" />
-        <div className="absolute bottom-0 right-0 h-80 w-80 rounded-full bg-cyan/15 blur-[120px]" />
-        <div className="relative flex h-full flex-col justify-between p-12">
-          <Logo />
-          <div>
-            <div className="eyebrow mb-4">Exposure intelligence</div>
-            <p className="max-w-md text-3xl font-bold leading-tight tracking-tight text-white">
-              Credentials are the keys to your infrastructure. Know the moment one goes public.
-            </p>
-            <div className="mt-10 grid max-w-md grid-cols-3 gap-3 font-mono text-xs">
-              {[['Detect', 'rules + AI'], ['Score', '0–100 risk'], ['Alert', 'email']].map(([a, b]) => (
-                <div key={a} className="rounded-lg border border-ink-700 bg-ink-950/50 p-3">
-                  <div className="text-cyan">{a}</div>
-                  <div className="mt-1 text-ink-400">{b}</div>
-                </div>
-              ))}
-            </div>
-          </div>
-          <p className="font-mono text-xs uppercase tracking-wider text-ink-500">GhostTrace / Exposure Intelligence</p>
-        </div>
-      </div>
-      <div className="flex items-center justify-center px-4 py-12 sm:px-8">
-        <div className="w-full max-w-sm">
-          <div className="mb-8 lg:hidden"><Logo /></div>
-          <h1 className="text-2xl font-bold tracking-tight text-white">{title}</h1>
-          {subtitle && <p className="mt-1.5 text-sm text-ink-300">{subtitle}</p>}
-          <div className="mt-8">{children}</div>
-          {footer && <div className="mt-6 text-center text-sm text-ink-400">{footer}</div>}
-        </div>
-      </div>
+        <div className="glass rounded-sheet p-6 sm:p-7">{children}</div>
+        {footer && <div className="mt-6 text-center text-subhead text-label-2">{footer}</div>}
+      </motion.div>
     </div>
   )
 }

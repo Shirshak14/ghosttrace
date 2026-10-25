@@ -1,120 +1,214 @@
-import { Suspense, useState } from 'react'
-import { NavLink, Outlet, useLocation } from 'react-router-dom'
+import { Suspense, useEffect, useState } from 'react'
+import { NavLink, useLocation, useNavigate, useOutlet } from 'react-router-dom'
 import clsx from 'clsx'
-import { Bell, LayoutDashboard, LogOut, Menu, PanelLeftClose, PanelLeftOpen, Radar, Settings, ShieldAlert, Eye, X, MailWarning } from 'lucide-react'
+import { AnimatePresence, motion } from 'motion/react'
+import { EASE_IOS, SPRING } from '../lib/motion'
+import { Bell, Eye, House, LogOut, MailWarning, MoreHorizontal, Plus, Radar, Settings, ShieldAlert, X } from 'lucide-react'
 import Logo from './Logo'
 import { PageLoader } from './ui'
 import { useAuth } from '../lib/auth'
+import { useConfirm } from './Toast'
 
-const NAV = [
-  { to: '/app', label: 'Dashboard', icon: LayoutDashboard, end: true },
-  { to: '/app/scans', label: 'Scans', icon: Radar },
+const MAIN = [
+  { to: '/app', label: 'Home', icon: House, end: true },
+  { to: '/app/scans', label: 'Scan', icon: Radar },
   { to: '/app/findings', label: 'Findings', icon: ShieldAlert },
-  { to: '/app/breach', label: 'Breach Intel', icon: MailWarning },
-  { to: '/app/monitors', label: 'Monitors', icon: Eye },
+  { to: '/app/breach', label: 'Breaches', icon: MailWarning },
+  { to: '/app/monitors', label: 'Monitoring', icon: Eye },
+]
+const ACCOUNT = [
   { to: '/app/alerts', label: 'Alerts', icon: Bell },
   { to: '/app/settings', label: 'Settings', icon: Settings },
 ]
+const ALL = [...MAIN, ...ACCOUNT]
 
-function Sidebar({ onNavigate, collapsed = false, onToggle }) {
-  const { user, logout } = useAuth()
+const isActive = (item, path) => (item.end ? path === item.to : path.startsWith(item.to))
+
+function Avatar({ user, className = 'h-9 w-9 text-subhead' }) {
   return (
-    <div className="flex h-full flex-col">
-      <div className={clsx('flex items-center py-5', collapsed ? 'justify-center px-2' : 'justify-between px-5')}>
-        {collapsed ? (
-          <button onClick={onToggle} className="rounded-md p-2 text-ink-300 hover:bg-ink-800 hover:text-white" title="Expand sidebar" aria-label="Expand sidebar">
-            <PanelLeftOpen className="h-5 w-5" />
-          </button>
-        ) : (
-          <>
-            <Logo to="/app" />
-            {onToggle && (
-              <button onClick={onToggle} className="rounded-md p-1.5 text-ink-400 hover:bg-ink-800 hover:text-white" title="Collapse sidebar" aria-label="Collapse sidebar">
-                <PanelLeftClose className="h-4 w-4" />
-              </button>
-            )}
-          </>
+    <span className={clsx('flex shrink-0 items-center justify-center rounded-full bg-gradient-to-b from-[#8E8E93] to-[#3A3A3A] font-semibold text-white', className)}>
+      {(user?.full_name || user?.email || '?').charAt(0).toUpperCase()}
+    </span>
+  )
+}
+
+function Sidebar() {
+  const { user, logout } = useAuth()
+  const { pathname } = useLocation()
+  const navigate = useNavigate()
+  const confirm = useConfirm()
+  const link = (item) => {
+    const active = isActive(item, pathname)
+    const Icon = item.icon
+    return (
+      <NavLink
+        key={item.to}
+        to={item.to}
+        end={item.end}
+        className={clsx(
+          'relative flex h-10 items-center gap-3 rounded-[16px] px-3 text-callout transition-colors',
+          active ? 'text-white' : 'text-label-2 hover:bg-white/5 hover:text-label',
         )}
-      </div>
-      <nav className="flex-1 space-y-0.5 px-3">
-        {NAV.map(({ to, label, icon: Icon, end }) => (
-          <NavLink
-            key={to}
-            to={to}
-            end={end}
-            onClick={onNavigate}
-            title={collapsed ? label : undefined}
-            className={({ isActive }) => clsx(
-              'group flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition',
-              collapsed && 'justify-center',
-              isActive ? 'bg-cyan/10 text-cyan' : 'text-ink-300 hover:bg-ink-800 hover:text-white',
-            )}
-          >
-            <Icon className="h-4 w-4 shrink-0" />
-            {!collapsed && label}
-          </NavLink>
-        ))}
-      </nav>
-      <div className={clsx('border-t border-ink-800', collapsed ? 'p-2' : 'p-4')}>
-        <div className={clsx('flex items-center gap-3', collapsed && 'flex-col')}>
-          <div className="flex h-9 w-9 items-center justify-center rounded-full bg-gradient-to-br from-signal to-cyan font-semibold text-ink-950">
-            {(user?.full_name || user?.email || '?').charAt(0).toUpperCase()}
-          </div>
-          {!collapsed && (
-            <div className="min-w-0 flex-1">
-              <div className="truncate text-sm font-medium text-white">{user?.full_name || 'Analyst'}</div>
-              <div className="truncate text-xs text-ink-400">{user?.email}</div>
-            </div>
-          )}
-          <button onClick={logout} className="rounded-md p-1.5 text-ink-400 hover:bg-ink-800 hover:text-white" title="Sign out" aria-label="Sign out">
-            <LogOut className="h-4 w-4" />
-          </button>
+      >
+        {active && <motion.span layoutId="side-active" transition={SPRING} className="absolute inset-0 rounded-[16px] bg-white/[0.12]" />}
+        <Icon className="relative h-[19px] w-[19px]" strokeWidth={2} />
+        <span className="relative">{item.label}</span>
+      </NavLink>
+    )
+  }
+  return (
+    <div className="glass flex h-full flex-col rounded-sheet p-3">
+      <div className="px-2 pb-5 pt-2"><Logo to="/app" /></div>
+      <button
+        onClick={() => navigate('/app/scans')}
+        className="press mb-4 flex h-10 items-center justify-center gap-2 rounded-[16px] bg-white/10 text-callout font-semibold text-label hover:bg-white/15"
+      >
+        <Plus className="h-4 w-4" strokeWidth={2.5} /> New scan
+      </button>
+      <nav className="space-y-0.5">{MAIN.map(link)}</nav>
+      <div className="mt-5 px-3 pb-1 text-footnote text-label-3">Account</div>
+      <nav className="space-y-0.5">{ACCOUNT.map(link)}</nav>
+      <div className="mt-auto flex items-center gap-3 rounded-3xl bg-white/[0.04] p-2.5">
+        <Avatar user={user} />
+        <div className="min-w-0 flex-1">
+          <div className="truncate text-subhead font-medium text-label">{user?.full_name || 'Your account'}</div>
+          <div className="truncate text-caption text-label-3">{user?.email}</div>
         </div>
+        <button
+          onClick={async () => { if (await confirm({ title: 'Sign out?', confirmLabel: 'Sign out', destructive: true })) logout() }}
+          className="press rounded-full p-2 text-label-3 hover:bg-white/10 hover:text-label"
+          aria-label="Sign out" title="Sign out"
+        >
+          <LogOut className="h-4 w-4" />
+        </button>
       </div>
     </div>
   )
 }
 
-export default function AppLayout() {
-  const [open, setOpen] = useState(false)
-  const [collapsed, setCollapsed] = useState(() => {
-    try { return localStorage.getItem('sidebar-collapsed') === '1' } catch { return false }
-  })
-  const toggle = () => setCollapsed((c) => {
-    try { localStorage.setItem('sidebar-collapsed', c ? '0' : '1') } catch { /* storage unavailable */ }
-    return !c
-  })
-  const location = useLocation()
-  const current = NAV.find((n) => (n.end ? location.pathname === n.to : location.pathname.startsWith(n.to)))
+function TabBar({ onMore }) {
+  const { pathname } = useLocation()
+  const tabs = MAIN.slice(0, 4)
+  const moreActive = !tabs.some((t) => isActive(t, pathname))
+  const cls = (on) => clsx('press flex flex-col items-center gap-0.5 py-1 text-caption2 font-medium', on ? 'text-tint-light' : 'text-label-3')
   return (
-    <div className="min-h-screen bg-ink-950">
-      <aside className={clsx('fixed inset-y-0 left-0 z-30 hidden border-r border-ink-800 bg-ink-900/60 transition-[width] duration-200 lg:block', collapsed ? 'w-16' : 'w-64')}>
-        <Sidebar collapsed={collapsed} onToggle={toggle} />
-      </aside>
+    <nav className="glass-bar hairline-t fixed inset-x-0 bottom-0 z-30 grid grid-cols-5 pb-[max(6px,env(safe-area-inset-bottom))] pt-1.5 lg:hidden">
+      {tabs.map((t) => {
+        const on = isActive(t, pathname)
+        const Icon = t.icon
+        return (
+          <NavLink key={t.to} to={t.to} end={t.end} className={cls(on)}>
+            <Icon className="h-6 w-6" strokeWidth={on ? 2.3 : 1.8} />
+            {t.label}
+          </NavLink>
+        )
+      })}
+      <button onClick={onMore} className={cls(moreActive)}>
+        <MoreHorizontal className="h-6 w-6" strokeWidth={moreActive ? 2.3 : 1.8} />
+        More
+      </button>
+    </nav>
+  )
+}
 
-      {open && (
-        <div className="fixed inset-0 z-40 lg:hidden">
-          <div className="absolute inset-0 bg-black/60" onClick={() => setOpen(false)} />
-          <aside className="absolute inset-y-0 left-0 w-72 border-r border-ink-800 bg-ink-900">
-            <button className="absolute right-3 top-5 rounded-md p-1.5 text-ink-300 hover:bg-ink-800" onClick={() => setOpen(false)} aria-label="Close menu">
-              <X className="h-5 w-5" />
-            </button>
-            <Sidebar onNavigate={() => setOpen(false)} />
-          </aside>
+function TopBar() {
+  const { pathname } = useLocation()
+  const [scrolled, setScrolled] = useState(false)
+  const current = ALL.find((n) => isActive(n, pathname))
+  useEffect(() => {
+    const on = () => setScrolled(window.scrollY > 56)
+    on()
+    window.addEventListener('scroll', on, { passive: true })
+    return () => window.removeEventListener('scroll', on)
+  }, [pathname])
+  return (
+    <header className={clsx(
+      'fixed inset-x-0 top-0 z-30 flex h-[calc(44px+env(safe-area-inset-top))] items-end justify-center pb-2.5 transition-all duration-300 ease-ios lg:hidden',
+      scrolled ? 'glass-bar hairline-b' : 'bg-transparent',
+    )}>
+      <span className={clsx('text-headline text-label transition-opacity duration-200', scrolled ? 'opacity-100' : 'opacity-0')}>
+        {current?.label || 'GhostTrace'}
+      </span>
+    </header>
+  )
+}
+
+function MoreSheet({ open, onClose }) {
+  const { user, logout } = useAuth()
+  const confirm = useConfirm()
+  const row = 'flex min-h-[52px] w-full items-center gap-3.5 px-4 py-2.5 text-left text-body transition-colors hover:bg-white/[0.04] active:bg-white/10'
+  return (
+    <AnimatePresence>
+    {open && (
+    <div className="fixed inset-0 z-40 lg:hidden">
+      <motion.div className="absolute inset-0 bg-black/60" onClick={onClose} initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} />
+      <motion.div
+        className="glass-thick absolute inset-x-0 bottom-0 rounded-t-sheet p-5 pb-[max(20px,env(safe-area-inset-bottom))]"
+        initial={{ y: '100%' }} animate={{ y: 0 }} exit={{ y: '100%' }} transition={SPRING}
+      >
+        <div className="mb-4 flex items-center justify-between">
+          <h2 className="text-title3 text-label">More</h2>
+          <button onClick={onClose} className="press rounded-full bg-white/10 p-2 text-label-2" aria-label="Close"><X className="h-4 w-4" /></button>
         </div>
-      )}
+        <div className="mb-5 flex items-center gap-3 px-1">
+          <Avatar user={user} className="h-12 w-12 text-title3" />
+          <div className="min-w-0">
+            <div className="truncate text-headline text-label">{user?.full_name || 'Your account'}</div>
+            <div className="truncate text-subhead text-label-2">{user?.email}</div>
+          </div>
+        </div>
+        <div className="space-y-4">
+          <div className="glass divide-y divide-white/10 overflow-hidden rounded-group">
+            {[MAIN[4], ...ACCOUNT].map((item) => (
+              <NavLink key={item.to} to={item.to} onClick={onClose} className={row}>
+                <item.icon className="h-5 w-5 text-label-2" strokeWidth={2} />
+                <span className="flex-1">{item.label}</span>
+              </NavLink>
+            ))}
+          </div>
+          <div className="glass overflow-hidden rounded-group">
+            <button className={clsx(row, 'text-ios-red')} onClick={async () => { if (await confirm({ title: 'Sign out?', confirmLabel: 'Sign out', destructive: true })) { onClose(); logout() } }}>Sign out</button>
+          </div>
+        </div>
+      </motion.div>
+    </div>
+    )}
+    </AnimatePresence>
+  )
+}
 
-      <div className={clsx('transition-[padding] duration-200', collapsed ? 'lg:pl-16' : 'lg:pl-64')}>
-        <header className="sticky top-0 z-20 flex h-14 items-center gap-3 border-b border-ink-800 bg-ink-950/80 px-4 backdrop-blur lg:hidden">
-          <button onClick={() => setOpen(true)} className="rounded-md p-1.5 text-ink-200 hover:bg-ink-800" aria-label="Open menu">
-            <Menu className="h-5 w-5" />
-          </button>
-          <span className="text-sm font-semibold text-white">{current?.label || 'GhostTrace'}</span>
-        </header>
-        <main className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-10">
-          <Suspense fallback={<PageLoader />}><Outlet /></Suspense>
+// Keeps the outgoing page's content mounted while it animates out, instead of swapping to the new route.
+function FrozenOutlet() {
+  const outlet = useOutlet()
+  const [frozen] = useState(outlet)
+  return frozen
+}
+
+export default function AppLayout() {
+  const [more, setMore] = useState(false)
+  const { pathname } = useLocation()
+  useEffect(() => { window.scrollTo({ top: 0 }) }, [pathname])
+  return (
+    <div className="min-h-dvh">
+      <aside className="fixed inset-y-3 left-3 z-30 hidden w-[264px] lg:block"><Sidebar /></aside>
+      <TopBar />
+      <div className="lg:pl-[280px]">
+        <main className="mx-auto max-w-6xl px-4 pb-32 pt-[calc(52px+env(safe-area-inset-top))] sm:px-6 lg:px-10 lg:pb-16 lg:pt-10">
+          <AnimatePresence mode="wait" initial={false}>
+            <motion.div
+              key={pathname}
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -6 }}
+              transition={{ duration: 0.22, ease: EASE_IOS }}
+            >
+              <Suspense fallback={<PageLoader />}><FrozenOutlet /></Suspense>
+            </motion.div>
+          </AnimatePresence>
         </main>
       </div>
+      <TabBar onMore={() => setMore(true)} />
+      <MoreSheet open={more} onClose={() => setMore(false)} />
     </div>
   )
 }
