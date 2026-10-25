@@ -34,10 +34,10 @@ export default function ResetPassword() {
     <AuthLayout
       title="Choose a new password"
       subtitle="Use at least 8 characters."
-      footer={<Link to="/login" className="font-medium text-cyan hover:underline">Back to sign in</Link>}
+      footer={<Link to="/login" className="font-medium text-tint-light hover:underline">Back to sign in</Link>}
     >
       {!token ? (
-        <div className="rounded-lg border border-sev-critical/30 bg-sev-critical/10 px-3 py-2 text-sm text-sev-critical">
+        <div className="rounded-3xl bg-ios-red/15 px-4 py-3 text-subhead text-ios-red">
           This reset link is incomplete. <Link to="/forgot-password" className="underline">Request a new one</Link>.
         </div>
       ) : done ? (
@@ -53,7 +53,7 @@ export default function ResetPassword() {
             <input className="input" type="password" autoComplete="new-password" required minLength={8} value={confirm} onChange={(e) => setConfirm(e.target.value)} />
           </Field>
           {error && (
-            <div className="rounded-lg border border-sev-critical/30 bg-sev-critical/10 px-3 py-2 text-sm text-sev-critical">
+            <div className="rounded-3xl bg-ios-red/15 px-4 py-3 text-subhead text-ios-red">
               {error} {error.includes('expired') && <Link to="/forgot-password" className="underline">Request a new link</Link>}
             </div>
           )}

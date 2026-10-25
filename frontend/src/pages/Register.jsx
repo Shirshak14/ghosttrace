@@ -30,7 +30,7 @@ export default function Register() {
     <AuthLayout
       title="Create your account"
       subtitle="Start tracing exposed credentials in minutes."
-      footer={<>Already have an account? <Link to="/login" className="font-medium text-cyan hover:underline">Sign in</Link></>}
+      footer={<>Already have an account? <Link to="/login" className="font-medium text-tint-light hover:underline">Sign in</Link></>}
     >
       <form onSubmit={submit} className="space-y-5">
         <div className="grid grid-cols-2 gap-3">
@@ -47,7 +47,7 @@ export default function Register() {
         <Field label="Password" hint="At least 8 characters.">
           <input className="input" type="password" autoComplete="new-password" minLength={8} required value={form.password} onChange={set('password')} />
         </Field>
-        {error && <div className="rounded-lg border border-sev-critical/30 bg-sev-critical/10 px-3 py-2 text-sm text-sev-critical">{error}</div>}
+        {error && <div className="rounded-3xl bg-ios-red/15 px-4 py-3 text-subhead text-ios-red">{error}</div>}
         <Button type="submit" loading={loading} className="w-full">Create account</Button>
       </form>
     </AuthLayout>
