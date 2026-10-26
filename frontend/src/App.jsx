@@ -9,6 +9,7 @@ const Login = lazy(() => import('./pages/Login'))
 const Register = lazy(() => import('./pages/Register'))
 const ForgotPassword = lazy(() => import('./pages/ForgotPassword'))
 const ResetPassword = lazy(() => import('./pages/ResetPassword'))
+const VerifyEmail = lazy(() => import('./pages/VerifyEmail'))
 const Dashboard = lazy(() => import('./pages/Dashboard'))
 const Scans = lazy(() => import('./pages/Scans'))
 const ScanDetail = lazy(() => import('./pages/ScanDetail'))
@@ -45,6 +46,7 @@ export default function App() {
         <Route path="/register" element={<GuestOnly><Register /></GuestOnly>} />
         <Route path="/forgot-password" element={<GuestOnly><ForgotPassword /></GuestOnly>} />
         <Route path="/reset-password" element={<ResetPassword />} />
+        <Route path="/verify-email" element={<VerifyEmail />} />
         <Route path="/app" element={<RequireAuth><AppLayout /></RequireAuth>}>
           <Route index element={<Dashboard />} />
           <Route path="scans" element={<Scans />} />

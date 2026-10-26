@@ -6,7 +6,6 @@ import smtplib
 import ssl
 from email.message import EmailMessage
 
-from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from ..config import get_settings
@@ -19,6 +18,9 @@ SEV_COLOR = {"critical": "#ff4d6d", "high": "#ff8a3d", "medium": "#f5c84c", "low
 
 class EmailNotConfigured(Exception):
     pass
+
+
+UNVERIFIED = "Verify your email address to receive alerts."
 
 
 def send_email(to: str, subject: str, text_body: str, html_body: str) -> None:
@@ -83,13 +85,10 @@ def alert_for_scan(db: Session, scan: Scan, findings: list[Finding]) -> Alert | 
     if user is None or not user.alerts_enabled:
         return None
     threshold = SEV_RANK.get(user.alert_min_severity, 2)
-    # Only alert on credentials that have not been seen in an earlier scan.
-    earlier = set(db.scalars(
-        select(Finding.fingerprint).where(Finding.user_id == user.id, Finding.scan_id != scan.id)
-    ))
+    # Only alert on credentials this scan saw for the first time; re-sightings keep their original first_seen.
     fresh = [
         f for f in findings
-        if SEV_RANK[f.severity] >= threshold and f.status == "open" and f.fingerprint not in earlier
+        if SEV_RANK[f.severity] >= threshold and f.status == "open" and f.first_seen == f.last_seen
     ]
     if not fresh:
         return None
@@ -97,6 +96,8 @@ def alert_for_scan(db: Session, scan: Scan, findings: list[Finding]) -> Alert | 
     subject = f"[GhostTrace] {len(fresh)} exposed credential(s) in {scan.target}"
     alert = Alert(user_id=user.id, scan_id=scan.id, subject=subject, findings_count=len(fresh))
     try:
+        if not user.email_verified:
+            raise EmailNotConfigured(UNVERIFIED)
         text, body = _render(scan, fresh)
         send_email(user.email, subject, text, body)
         alert.status = "sent"
@@ -136,4 +137,31 @@ def send_password_reset(user: User, token: str) -> bool:
         return False
     except Exception as exc:  # noqa: BLE001
         log.warning("Password reset email failed: %s", exc)
+        return False
+
+
+def send_verification(user: User, token: str) -> bool:
+    """Email a link that confirms the account owns its address. Returns False if it could not be sent."""
+    link = f"{get_settings().frontend_url}/verify-email?token={token}"
+    text = (
+        "Confirm your email address for GhostTrace so we can send you leak alerts.\n\n"
+        f"Confirm it here (link valid for 48 hours): {link}\n\n"
+        "If you didn't create a GhostTrace account, ignore this email.\n"
+    )
+    body = f"""<div style="background:#050a14;padding:32px;font-family:Arial,sans-serif">
+<div style="max-width:560px;margin:0 auto;background:#08111f;border:1px solid #162a47;border-radius:12px;padding:28px">
+<div style="color:#22d3ee;font-family:monospace;font-size:12px;letter-spacing:2px">GHOSTTRACE</div>
+<h2 style="color:#fff;margin:10px 0 6px">Confirm your email</h2>
+<p style="color:#9aabc4">Confirm this address so GhostTrace can email you when it finds a leak. The link is valid for 48 hours.</p>
+<a href="{html.escape(link)}" style="display:inline-block;margin-top:14px;background:#22d3ee;color:#050a14;padding:11px 20px;border-radius:8px;font-weight:bold;text-decoration:none">Confirm email</a>
+<p style="color:#6b7f9e;font-size:12px;margin-top:22px">If you didn't create a GhostTrace account, ignore this email.</p>
+</div></div>"""
+    try:
+        send_email(user.email, "Confirm your GhostTrace email", text, body)
+        return True
+    except EmailNotConfigured:
+        log.warning("SMTP not configured. Verification link for %s: %s", user.email, link)
+        return False
+    except Exception as exc:  # noqa: BLE001
+        log.warning("Verification email failed: %s", exc)
         return False

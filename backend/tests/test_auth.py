@@ -82,3 +82,40 @@ def test_rate_limit_ignores_spoofed_forwarded_for(client, monkeypatch):
     ]
     assert codes[10] == 429
     reset_limits()
+
+
+def test_email_verification_flow(client, monkeypatch):
+    from app.config import get_settings
+
+    monkeypatch.setattr(get_settings(), "smtp_host", "smtp.test")
+    sent = {}
+    monkeypatch.setattr("app.routers.auth.send_verification", lambda user, token: sent.update(token=token))
+    r = client.post("/api/auth/register", json={"email": "v@example.com", "password": "password123"})  # ghosttrace:ignore
+    assert r.json()["user"]["email_verified"] is False
+    auth = {"Authorization": f"Bearer {r.json()['access_token']}"}
+
+    # Alerts are held back until the address is confirmed.
+    client.patch("/api/auth/me", json={"alert_min_severity": "low"}, headers=auth)
+    scan = client.post("/api/scans/text", json={"content": "AWS_ACCESS_KEY_ID=AKIAZ3MPLQ7RT2VX9W4K\n"}, headers=auth).json()  # ghosttrace:ignore
+    alerts = client.get("/api/alerts", headers=auth).json()
+    assert scan["findings_count"] == 1 and alerts[0]["status"] == "skipped" and "Verify" in alerts[0]["error"]
+
+    assert client.post("/api/auth/verify-email", json={"token": "not-a-real-token"}).status_code == 400
+    assert client.post("/api/auth/verify-email", json={"token": sent["token"]}).json()["email_verified"] is True
+    assert client.get("/api/auth/me", headers=auth).json()["email_verified"] is True
+    assert client.post("/api/auth/resend-verification", headers=auth).json()["message"].startswith("Your email is already")
+
+
+def test_logout_others_and_password_reset_revoke_old_tokens(client, monkeypatch):
+    sent = _token(monkeypatch)
+    _register(client)
+    login = lambda pw: client.post("/api/auth/login", json={"email": "r@example.com", "password": pw}).json()["access_token"]  # noqa: E731
+    me = lambda t: client.get("/api/auth/me", headers={"Authorization": f"Bearer {t}"}).status_code  # noqa: E731
+    laptop, phone = login("oldpassword1"), login("oldpassword1")
+
+    fresh = client.post("/api/auth/logout-others", headers={"Authorization": f"Bearer {laptop}"}).json()["access_token"]
+    assert me(fresh) == 200 and me(laptop) == 401 and me(phone) == 401
+
+    client.post("/api/auth/forgot-password", json={"email": "r@example.com"})
+    client.post("/api/auth/reset-password", json={"token": sent["token"], "password": "newpassword2"})
+    assert me(fresh) == 401

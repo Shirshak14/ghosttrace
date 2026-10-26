@@ -10,7 +10,7 @@ from ..config import get_settings
 from ..db import SessionLocal
 from ..intel.breach import BreachLookupError
 from ..models import Alert, BreachCheck, Monitor, Scan, User
-from .alerts import EmailNotConfigured, send_email
+from .alerts import UNVERIFIED, EmailNotConfigured, send_email
 from .scanner import run_github_scan
 
 log = logging.getLogger("ghosttrace.monitoring")
@@ -54,6 +54,8 @@ def _run_email_monitor(db, m: Monitor) -> None:
         names = ", ".join(b.get("name") or "?" for b in new)
         alert = Alert(user_id=user.id, subject=subject, findings_count=len(new))
         try:
+            if not user.email_verified:
+                raise EmailNotConfigured(UNVERIFIED)
             send_email(user.email, subject, f"{m.target} was found in: {names}. Change the password on these services.",
                        f"<p><b>{m.target}</b> was found in: {names}.</p><p>Change the password on these services and anywhere it was reused.</p>")
             alert.status = "sent"

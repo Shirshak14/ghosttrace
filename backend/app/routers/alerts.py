@@ -7,7 +7,7 @@ from ..db import get_db
 from ..models import Alert, User
 from ..schemas import AlertOut
 from ..security import get_current_user
-from ..services.alerts import EmailNotConfigured, send_email
+from ..services.alerts import UNVERIFIED, EmailNotConfigured, send_email
 
 router = APIRouter(prefix="/api/alerts", tags=["alerts"])
 
@@ -29,6 +29,8 @@ def send_test(user: User = Depends(get_current_user), db: Session = Depends(get_
     subject = "[GhostTrace] Test alert"
     alert = Alert(user_id=user.id, subject=subject, findings_count=0)
     try:
+        if not user.email_verified:
+            raise EmailNotConfigured(UNVERIFIED)
         send_email(user.email, subject, "Email alerts from GhostTrace are working.",
                    "<p style='font-family:Arial'>Email alerts from <b>GhostTrace</b> are working.</p>")
         alert.status = "sent"

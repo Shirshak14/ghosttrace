@@ -7,7 +7,7 @@ from ..models import Finding, Scan, User
 from ..schemas import FindingOut, GithubScanIn, ScanOut, TextScanIn
 from ..security import get_current_user
 from ..services.alerts import alert_for_scan
-from ..services.scanner import persist_hits, run_github_scan, scan_text_blob, scan_upload
+from ..services.scanner import UploadTooLarge, persist_hits, run_github_scan, scan_text_blob, scan_upload
 from ..sources.github import GitHubError, parse_owner_target, parse_repo_target
 
 router = APIRouter(prefix="/api/scans", tags=["scans"])
@@ -61,9 +61,10 @@ def scan_text_content(body: TextScanIn, user: User = Depends(get_current_user), 
     return _complete_inline(db, scan, scan_text_blob(body.content, body.label or "pasted.txt", "text"))
 
 
+# A plain `def` route runs in the threadpool; as `async def`, the CPU-bound scan would block every other request.
 @router.post("/upload", response_model=ScanOut, status_code=status.HTTP_201_CREATED)
-async def scan_file(file: UploadFile = File(...), label: str = Form(default=""), user: User = Depends(get_current_user), db: Session = Depends(get_db)) -> Scan:
-    data = await file.read(MAX_UPLOAD + 1)
+def scan_file(file: UploadFile = File(...), label: str = Form(default=""), user: User = Depends(get_current_user), db: Session = Depends(get_db)) -> Scan:
+    data = file.file.read(MAX_UPLOAD + 1)
     if len(data) > MAX_UPLOAD:
         raise HTTPException(status.HTTP_413_REQUEST_ENTITY_TOO_LARGE, "Files must be 20 MB or smaller.")
     name = file.filename or "upload.txt"
@@ -72,6 +73,10 @@ async def scan_file(file: UploadFile = File(...), label: str = Form(default=""),
     db.commit()
     try:
         stats = scan_upload(name, data)
+    except UploadTooLarge as exc:
+        scan.status, scan.error = "failed", str(exc)
+        db.commit()
+        raise HTTPException(status.HTTP_413_REQUEST_ENTITY_TOO_LARGE, scan.error)
     except Exception as exc:  # bad zip etc.
         scan.status, scan.error = "failed", f"Could not read file: {exc}"
         db.commit()

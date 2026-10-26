@@ -9,7 +9,7 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
 from .config import get_settings
-from .db import Base, engine
+from .db import SessionLocal, ensure_schema
 from .routers import alerts, auth, breach, dashboard, findings, monitors, reports, scans
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
@@ -19,7 +19,14 @@ STATIC_DIR = Path(__file__).resolve().parent.parent / "static"
 
 @asynccontextmanager
 async def lifespan(_: FastAPI):
-    Base.metadata.create_all(bind=engine)
+    ensure_schema()
+    from .services.scanner import dedupe_findings, fail_interrupted_scans
+
+    with SessionLocal() as db:
+        if n := fail_interrupted_scans(db):
+            logging.getLogger("ghosttrace").warning("Marked %d interrupted scan(s) as failed", n)
+        if n := dedupe_findings(db):
+            logging.getLogger("ghosttrace").info("Merged %d duplicate finding row(s)", n)
     from .ml.scorer import _model
 
     _model()  # load (or train on first boot) the risk model before serving

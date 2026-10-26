@@ -1,6 +1,6 @@
 from datetime import datetime, timezone
 
-from sqlalchemy import JSON, Boolean, DateTime, Float, ForeignKey, Integer, String, Text, UniqueConstraint
+from sqlalchemy import JSON, Boolean, DateTime, Float, ForeignKey, Integer, String, Text, UniqueConstraint, true
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from .db import Base
@@ -20,6 +20,10 @@ class User(Base):
     password_hash: Mapped[str] = mapped_column(String(200))
     alerts_enabled: Mapped[bool] = mapped_column(Boolean, default=True)
     alert_min_severity: Mapped[str] = mapped_column(String(16), default="high")
+    # Accounts that existed before email verification count as verified (server_default) so they keep their alerts.
+    email_verified: Mapped[bool] = mapped_column(Boolean, default=False, server_default=true())
+    # Bumped by "sign out other devices" and password resets; login tokens carry it and stop working once it changes.
+    token_version: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
     scans: Mapped[list["Scan"]] = relationship(back_populates="user", cascade="all, delete-orphan")

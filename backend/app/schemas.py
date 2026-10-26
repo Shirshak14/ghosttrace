@@ -32,6 +32,10 @@ class ResetPasswordIn(BaseModel):
     password: str = Field(min_length=8, max_length=128)
 
 
+class TokenIn(BaseModel):
+    token: str = Field(min_length=10, max_length=2000)
+
+
 class UserOut(ORM):
     id: int
     email: str
@@ -39,6 +43,7 @@ class UserOut(ORM):
     organization: str
     alerts_enabled: bool
     alert_min_severity: str
+    email_verified: bool
     created_at: datetime
 
 
