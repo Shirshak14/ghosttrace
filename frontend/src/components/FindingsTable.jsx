@@ -1,9 +1,10 @@
 import { GitCommit } from 'lucide-react'
 import { RiskMeter, Row, SeverityBadge, StatusBadge } from './ui'
 import { timeAgo } from '../lib/format'
+import { FixMenu } from './GitHubFix'
 
 // Renders finding rows; wrap in <Group> to get the grouped-list container.
-export default function FindingsTable({ items, onSelect, compact = false }) {
+export default function FindingsTable({ items, onSelect, onChange, compact = false }) {
   return items.map((f) => (
     <Row
       key={f.id}
@@ -24,6 +25,7 @@ export default function FindingsTable({ items, onSelect, compact = false }) {
           <div className="hidden sm:block"><RiskMeter value={f.risk_score} /></div>
           {!compact && <div className="hidden w-24 md:block"><StatusBadge status={f.status} /></div>}
           {!compact && <span className="hidden w-16 text-right text-footnote text-label-3 lg:block">{timeAgo(f.first_seen)}</span>}
+          <FixMenu finding={f} onChange={onChange} />
         </div>
       }
       className="[&>div:first-child]:min-w-[76px]"

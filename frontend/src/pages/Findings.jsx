@@ -6,6 +6,7 @@ import { api, download } from '../lib/api'
 import { Button, Card, EmptyState, Group, PageHeader, PageLoader, Segmented } from '../components/ui'
 import FindingsTable from '../components/FindingsTable'
 import FindingDrawer from '../components/FindingDrawer'
+import { applyUpdate } from '../lib/findings'
 import { useToast } from '../components/Toast'
 
 const SEVS = ['critical', 'high', 'medium', 'low']
@@ -77,6 +78,11 @@ export default function Findings() {
     update({ [key]: next.join(',') })
   }
 
+  function onChange(f, sameSecret) {
+    setSelected((s) => (s?.id === f.id ? f : s))
+    setData((d) => ({ ...d, items: d.items.map(applyUpdate(f, sameSecret)) }))
+  }
+
   // The API treats an empty status as "all"; the segmented control needs a non-empty value to select.
   const statusValue = filters.status === '' ? 'all' : filters.status
   const pages = data ? Math.max(1, Math.ceil(data.total / data.page_size)) : 1
@@ -115,7 +121,7 @@ export default function Findings() {
         <Card><EmptyState icon={ShieldCheck} color="#3DDC84" title="No findings match">Try clearing filters, or run a new scan.</EmptyState></Card>
       ) : (
         <>
-          <Group inset={16}><FindingsTable items={data.items} onSelect={setSelected} /></Group>
+          <Group inset={16}><FindingsTable items={data.items} onSelect={setSelected} onChange={onChange} /></Group>
           <div className="mt-4 flex items-center justify-between px-2 text-footnote text-label-3">
             <span>{data.total} finding{data.total === 1 ? '' : 's'}</span>
             <div className="flex items-center gap-2">
@@ -130,7 +136,7 @@ export default function Findings() {
       <FindingDrawer
         finding={selected}
         onClose={() => setSelected(null)}
-        onChange={(f) => { setSelected(f); setData((d) => ({ ...d, items: d.items.map((x) => (x.fingerprint === f.fingerprint ? { ...x, status: f.status } : x)) })) }}
+        onChange={onChange}
       />
     </>
   )
