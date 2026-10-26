@@ -9,6 +9,7 @@ import { timeAgo, TARGET_LABELS } from '../lib/format'
 import { Button, Card, EmptyState, Group, PageHeader, PageLoader, Row, StatusBadge } from '../components/ui'
 import FindingsTable from '../components/FindingsTable'
 import FindingDrawer from '../components/FindingDrawer'
+import { applyUpdate } from '../lib/findings'
 import { useAuth } from '../lib/auth'
 import { useToast } from '../components/Toast'
 import CountUp from '../components/CountUp'
@@ -81,6 +82,11 @@ export default function Dashboard() {
   const [timeline, setTimeline] = useState([])
   const [days, setDays] = useState(30)
   const [selected, setSelected] = useState(null)
+
+  function onChange(f, sameSecret) {
+    setSelected((s) => (s?.id === f.id ? f : s))
+    setData((d) => ({ ...d, top_findings: d.top_findings.map(applyUpdate(f, sameSecret)) }))
+  }
 
   useEffect(() => {
     Promise.all([api(`/api/dashboard/summary?days=${days}`), api('/api/dashboard/timeline?limit=7')])
@@ -211,7 +217,7 @@ export default function Dashboard() {
           header="Fix these first"
           action={<Link to="/app/findings" className="text-callout text-tint-light hover:underline">See all</Link>}
         >
-          <FindingsTable items={data.top_findings.slice(0, 6)} onSelect={setSelected} compact />
+          <FindingsTable items={data.top_findings.slice(0, 6)} onSelect={setSelected} onChange={onChange} compact />
         </Group>
       )}
 
@@ -297,7 +303,7 @@ export default function Dashboard() {
       <FindingDrawer
         finding={selected}
         onClose={() => setSelected(null)}
-        onChange={(f) => { setSelected(f); setData((d) => ({ ...d, top_findings: d.top_findings.map((x) => (x.id === f.id ? f : x)) })) }}
+        onChange={onChange}
       />
     </>
   )

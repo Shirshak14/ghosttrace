@@ -102,3 +102,45 @@ def test_github_errors_surface(auth_client, monkeypatch):
     r = auth_client.post("/api/scans/github", json={"target_type": "github_user", "target": "ghost-nobody"})
     scan = auth_client.get(f"/api/scans/{r.json()['id']}").json()
     assert scan["status"] == "failed" and "not found" in scan["error"]
+
+
+def test_recheck_github_finding(auth_client, monkeypatch):
+    from app.sources import github as gh
+
+    repo = RepoInfo("acme/web", "dev", False, "https://github.com/acme/web", False, False, None)
+    files = {"src/app config.py": f'\n\nAWS_KEY = "{AWS}"\n'.encode()}
+
+    async def get_repo(self, full_name):
+        return repo
+
+    async def get_tree(self, r):
+        return [TreeFile(p, "sha", len(c)) for p, c in files.items()]
+
+    async def get_file(self, r, path):
+        return files.get(path)
+
+    for name, fn in [("get_repo", get_repo), ("get_tree", get_tree), ("get_file", get_file)]:
+        monkeypatch.setattr(gh.GitHubClient, name, fn)
+
+    r = auth_client.post("/api/scans/github", json={"target_type": "github_repo", "target": "acme/web", "include_history": False})
+    f = auth_client.get(f"/api/scans/{r.json()['id']}/findings").json()[0]
+    assert f["line_number"] == 3
+    assert f["edit_url"] == "https://github.com/acme/web/edit/dev/src/app%20config.py"
+    assert f["view_url"].startswith("https://github.com/acme/web/blob/dev/src/app config.py#L3")
+
+    # The secret moved down a line: still present, location refreshed, still open.
+    files["src/app config.py"] = f'\n\n\nAWS_KEY = "{AWS}"\n'.encode()
+    res = auth_client.post(f"/api/findings/{f['id']}/recheck").json()
+    assert res["present"] is True and res["line"] == 4 and res["branch"] == "dev"
+    assert res["finding"]["line_number"] == 4 and res["finding"]["status"] == "open"
+
+    # Removed from the file: the finding closes.
+    files["src/app config.py"] = b'AWS_KEY = os.environ["AWS_KEY"]\n'
+    res = auth_client.post(f"/api/findings/{f['id']}/recheck").json()
+    assert res["present"] is False and res["finding"]["status"] == "resolved"
+    assert "rotate" in res["message"]
+
+    text = auth_client.post("/api/scans/text", json={"content": f"k={AWS}", "label": ".env"}).json()
+    tf = auth_client.get(f"/api/scans/{text['id']}/findings").json()[0]
+    assert tf["edit_url"] is None and tf["view_url"] is None
+    assert auth_client.post(f"/api/findings/{tf['id']}/recheck").status_code == 400

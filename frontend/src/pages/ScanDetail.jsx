@@ -6,6 +6,7 @@ import { formatDate, TARGET_LABELS } from '../lib/format'
 import { Button, Card, EmptyState, Group, Notice, PageHeader, PageLoader, StatusBadge } from '../components/ui'
 import FindingsTable from '../components/FindingsTable'
 import FindingDrawer from '../components/FindingDrawer'
+import { applyUpdate } from '../lib/findings'
 import { useToast } from '../components/Toast'
 
 export default function ScanDetail() {
@@ -14,6 +15,11 @@ export default function ScanDetail() {
   const [scan, setScan] = useState(null)
   const [findings, setFindings] = useState([])
   const [selected, setSelected] = useState(null)
+
+  function onChange(f, sameSecret) {
+    setSelected((s) => (s?.id === f.id ? f : s))
+    setFindings((xs) => xs.map(applyUpdate(f, sameSecret)))
+  }
 
   useEffect(() => {
     let alive = true
@@ -96,7 +102,7 @@ export default function ScanDetail() {
       )}
 
       {!running && (findings.length ? (
-        <Group header="Findings" footer={scan.message}><FindingsTable items={findings} onSelect={setSelected} /></Group>
+        <Group header="Findings" footer={scan.message}><FindingsTable items={findings} onSelect={setSelected} onChange={onChange} /></Group>
       ) : (
         scan.status === 'completed' && <Card><EmptyState icon={ShieldCheck} color="#3DDC84" title="No credentials found">GhostTrace did not find any exposed secrets in this target.</EmptyState></Card>
       ))}
@@ -104,7 +110,7 @@ export default function ScanDetail() {
       <FindingDrawer
         finding={selected}
         onClose={() => setSelected(null)}
-        onChange={(f) => { setSelected(f); setFindings((xs) => xs.map((x) => (x.fingerprint === f.fingerprint ? { ...x, status: f.status } : x))) }}
+        onChange={onChange}
       />
     </>
   )

@@ -1,3 +1,4 @@
+from datetime import datetime, timezone
 from typing import Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -6,8 +7,10 @@ from sqlalchemy.orm import Session
 
 from ..db import get_db
 from ..models import Finding, User
-from ..schemas import FindingOut, FindingPage, FindingUpdate
+from ..schemas import FindingOut, FindingPage, FindingUpdate, RecheckOut
 from ..security import get_current_user
+from ..services.recheck import recheck_finding
+from ..sources.github import GitHubError
 
 router = APIRouter(prefix="/api/findings", tags=["findings"])
 
@@ -68,3 +71,18 @@ def update_finding(finding_id: int, body: FindingUpdate, user: User = Depends(ge
     db.commit()
     db.refresh(f)
     return f
+
+
+@router.post("/{finding_id}/recheck", response_model=RecheckOut)
+def recheck(finding_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db)) -> RecheckOut:
+    """Fetch the file again from GitHub and report whether the secret is still there."""
+    f = get_finding(finding_id, user, db)
+    if f.source_type != "github" or not f.repository or not f.file_path:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Only GitHub findings can be rechecked. Upload the file again to rescan it.")
+    try:
+        r = recheck_finding(db, f)
+    except GitHubError as exc:
+        raise HTTPException(status.HTTP_502_BAD_GATEWAY, str(exc)) from exc
+    db.refresh(f)
+    return RecheckOut(finding=FindingOut.model_validate(f), present=r.present, line=r.line, branch=r.branch, edit_url=r.edit_url,
+                      view_url=r.view_url, message=r.message, checked_at=datetime.now(timezone.utc))

@@ -4,6 +4,7 @@ import { Button, Notice, RiskMeter, SeverityBadge, Sheet, StatusBadge } from './
 import { api } from '../lib/api'
 import { formatDate } from '../lib/format'
 import { useToast } from './Toast'
+import { FixPanel } from './GitHubFix'
 
 const REMEDIATION = {
   aws: 'Deactivate the key in AWS IAM, create a new one, and review CloudTrail for activity from the leaked key.',
@@ -132,6 +133,8 @@ export default function FindingDrawer({ finding, onClose, onChange }) {
               <p className="mt-2 text-label-2">Deleting the file is not enough. The secret stays in git history until it is rotated.</p>
             )}
           </Notice>
+
+          <FixPanel finding={f} onChange={onChange} />
 
           <section className="grid grid-cols-2 gap-4 px-1">
             <Meta label="First seen">{formatDate(f.first_seen)}</Meta>

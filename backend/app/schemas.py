@@ -1,7 +1,8 @@
 from datetime import datetime
+from urllib.parse import quote
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, EmailStr, Field
+from pydantic import BaseModel, ConfigDict, EmailStr, Field, computed_field
 
 Severity = Literal["critical", "high", "medium", "low"]
 
@@ -114,6 +115,44 @@ class FindingOut(ORM):
     status: str
     first_seen: datetime
     last_seen: datetime
+
+    def _blob(self) -> tuple[str, str] | None:
+        """(repo URL, branch) parsed from a file link like https://github.com/o/r/blob/<branch>/<path>#L3."""
+        if self.source_type != "github" or not self.url or not self.file_path or "/blob/" not in self.url:
+            return None
+        repo_url, rest = self.url.split("/blob/", 1)
+        rest = rest.split("#", 1)[0]
+        suffix = "/" + self.file_path
+        return (repo_url, rest[: -len(suffix)]) if rest.endswith(suffix) else None
+
+    @computed_field
+    @property
+    def edit_url(self) -> str | None:
+        """GitHub web editor for the file on its branch; None for history-only findings and non-GitHub sources."""
+        blob = self._blob()
+        return f"{blob[0]}/edit/{blob[1]}/{quote(self.file_path)}" if blob else None
+
+    @computed_field
+    @property
+    def view_url(self) -> str | None:
+        """The file as it is now on GitHub (HEAD for history-only findings, which link to a commit)."""
+        if self.source_type != "github" or not self.repository or not self.file_path:
+            return None
+        blob = self._blob()
+        if blob:
+            return self.url
+        return f"https://github.com/{self.repository}/blob/HEAD/{quote(self.file_path)}"
+
+
+class RecheckOut(BaseModel):
+    finding: FindingOut
+    present: bool
+    line: int | None
+    branch: str
+    edit_url: str | None
+    view_url: str
+    message: str
+    checked_at: datetime
 
 
 class FindingUpdate(BaseModel):
