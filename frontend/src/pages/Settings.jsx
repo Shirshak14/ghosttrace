@@ -1,17 +1,18 @@
 import { useEffect, useState } from 'react'
-import { Bell, Database, Mail } from 'lucide-react'
+import { Bell, Database, Laptop, Mail } from 'lucide-react'
 import { Github } from '../components/icons'
 import { api } from '../lib/api'
 import { useAuth } from '../lib/auth'
 import { Button, Card, Field, Group, PageHeader, Row, Switch } from '../components/ui'
-import { useToast } from '../components/Toast'
+import { useConfirm, useToast } from '../components/Toast'
 
 const GREEN = '#3DDC84'
 const ORANGE = '#FFA726'
 
 export default function Settings() {
-  const { user, setUser } = useAuth()
+  const { user, setUser, handleToken } = useAuth()
   const toast = useToast()
+  const confirm = useConfirm()
   const [form, setForm] = useState({
     full_name: user.full_name, organization: user.organization, alerts_enabled: user.alerts_enabled, alert_min_severity: user.alert_min_severity,
   })
@@ -33,6 +34,21 @@ export default function Settings() {
     }
   }
 
+  async function signOutOthers() {
+    const ok = await confirm({
+      title: 'Sign out other devices?',
+      message: 'Every other browser and phone signed in to this account will need to sign in again.',
+      confirmLabel: 'Sign out others', destructive: true,
+    })
+    if (!ok) return
+    try {
+      handleToken(await api('/api/auth/logout-others', { method: 'POST' }))
+      toast('Other devices are signed out')
+    } catch (err) {
+      toast(err.message, 'error')
+    }
+  }
+
   return (
     <>
       <PageHeader title="Settings" />
@@ -43,7 +59,7 @@ export default function Settings() {
               <Field label="Full name"><input className="input" value={form.full_name} onChange={(e) => setForm({ ...form, full_name: e.target.value })} /></Field>
               <Field label="Organization"><input className="input" value={form.organization} onChange={(e) => setForm({ ...form, organization: e.target.value })} /></Field>
             </div>
-            <Field label="Email" hint="Alerts are sent to this address."><input className="input opacity-60" value={user.email} disabled /></Field>
+            <Field label="Email" hint={user.email_verified ? 'Alerts are sent to this address.' : 'Not confirmed yet: alerts start once you open the link we emailed you.'}><input className="input opacity-60" value={user.email} disabled /></Field>
           </Card>
 
           <Group header="Alerts" footer="Only findings at or above the threshold trigger an email.">
@@ -67,6 +83,13 @@ export default function Settings() {
                   <option value="low">Everything</option>
                 </select>
               }
+            />
+          </Group>
+          <Group header="Security" footer="Use this if you signed in on a shared computer or lost a device. Resetting your password does it too.">
+            <Row
+              icon={Laptop}
+              title="Sign out other devices"
+              trailing={<Button type="button" variant="danger" size="sm" onClick={signOutOthers}>Sign out</Button>}
             />
           </Group>
           <Button type="submit" loading={busy} size="lg">Save changes</Button>

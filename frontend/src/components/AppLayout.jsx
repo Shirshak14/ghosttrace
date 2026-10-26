@@ -3,11 +3,12 @@ import { NavLink, useLocation, useNavigate, useOutlet } from 'react-router-dom'
 import clsx from 'clsx'
 import { AnimatePresence, motion } from 'motion/react'
 import { EASE_IOS, SPRING } from '../lib/motion'
-import { Bell, Eye, House, LogOut, MailWarning, MoreHorizontal, Plus, Radar, Settings, ShieldAlert, X } from 'lucide-react'
+import { Bell, Eye, House, LogOut, MailCheck, MailWarning, MoreHorizontal, Plus, Radar, Settings, ShieldAlert, X } from 'lucide-react'
 import Logo from './Logo'
-import { PageLoader } from './ui'
+import { Button, PageLoader } from './ui'
+import { api } from '../lib/api'
 import { useAuth } from '../lib/auth'
-import { useConfirm } from './Toast'
+import { useConfirm, useToast } from './Toast'
 
 const MAIN = [
   { to: '/app', label: 'Home', icon: House, end: true },
@@ -177,6 +178,33 @@ function MoreSheet({ open, onClose }) {
   )
 }
 
+function VerifyBanner() {
+  const { user } = useAuth()
+  const toast = useToast()
+  const [busy, setBusy] = useState(false)
+  if (!user || user.email_verified) return null
+  async function resend() {
+    setBusy(true)
+    try {
+      toast((await api('/api/auth/resend-verification', { method: 'POST' })).message)
+    } catch (err) {
+      toast(err.message, 'error')
+    } finally {
+      setBusy(false)
+    }
+  }
+  return (
+    <div className="glass mb-6 flex flex-col gap-3 rounded-group p-4 sm:flex-row sm:items-center">
+      <MailCheck className="h-5 w-5 shrink-0 text-[#FFA726]" />
+      <div className="min-w-0 flex-1 text-subhead text-label-2">
+        <span className="font-medium text-label">Confirm your email to get leak alerts.</span>{' '}
+        We sent a link to {user.email}.
+      </div>
+      <Button variant="gray" size="sm" loading={busy} onClick={resend}>Send a new link</Button>
+    </div>
+  )
+}
+
 // Keeps the outgoing page's content mounted while it animates out, instead of swapping to the new route.
 function FrozenOutlet() {
   const outlet = useOutlet()
@@ -194,6 +222,7 @@ export default function AppLayout() {
       <TopBar />
       <div className="lg:pl-[280px]">
         <main className="mx-auto max-w-6xl px-4 pb-32 pt-[calc(52px+env(safe-area-inset-top))] sm:px-6 lg:px-10 lg:pb-16 lg:pt-10">
+          <VerifyBanner />
           <AnimatePresence mode="wait" initial={false}>
             <motion.div
               key={pathname}

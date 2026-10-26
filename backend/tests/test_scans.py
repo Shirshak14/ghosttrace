@@ -102,3 +102,58 @@ def test_github_errors_surface(auth_client, monkeypatch):
     r = auth_client.post("/api/scans/github", json={"target_type": "github_user", "target": "ghost-nobody"})
     scan = auth_client.get(f"/api/scans/{r.json()['id']}").json()
     assert scan["status"] == "failed" and "not found" in scan["error"]
+
+
+def test_rescan_updates_findings_instead_of_duplicating(auth_client):
+    content = f"AWS_ACCESS_KEY_ID={AWS}\n"
+    first = auth_client.post("/api/scans/text", json={"content": content, "label": ".env"}).json()
+    fid = auth_client.get(f"/api/scans/{first['id']}/findings").json()[0]["id"]
+    auth_client.patch(f"/api/findings/{fid}", json={"status": "resolved"})
+
+    second = auth_client.post("/api/scans/text", json={"content": content, "label": ".env"}).json()
+    assert second["findings_count"] == 1
+    page = auth_client.get("/api/findings").json()
+    assert page["total"] == 1
+    again = page["items"][0]
+    assert again["id"] == fid and again["status"] == "resolved" and again["scan_id"] == second["id"]
+    assert auth_client.get("/api/dashboard/summary").json()["totals"]["findings"] == 1
+
+
+def test_startup_cleanup_merges_duplicates_and_fails_stuck_scans(auth_client):
+    from datetime import timedelta
+
+    from app.db import SessionLocal
+    from app.models import Finding, Scan
+    from app.services.scanner import dedupe_findings, fail_interrupted_scans
+
+    scan_id = auth_client.post("/api/scans/text", json={"content": f"AWS_ACCESS_KEY_ID={AWS}\n"}).json()["id"]
+    with SessionLocal() as db:
+        original = db.query(Finding).one()
+        copies = []
+        for _ in range(3):
+            copy = Finding(**{c.name: getattr(original, c.name) for c in Finding.__table__.columns if c.name != "id"})
+            copy.first_seen = original.first_seen + timedelta(hours=1)
+            copies.append(copy)
+        copies[0].status = "false_positive"
+        db.add_all(copies)
+        stuck = Scan(user_id=original.user_id, target_type="github_user", target="acme", status="running")
+        db.add(stuck)
+        db.commit()
+
+        assert dedupe_findings(db) == 3
+        kept = db.query(Finding).one()
+        assert kept.status == "false_positive" and kept.first_seen == original.first_seen
+        assert fail_interrupted_scans(db) == 1
+        assert db.get(Scan, stuck.id).status == "failed" and db.get(Scan, scan_id).status == "completed"
+
+
+def test_zip_with_too_many_files_is_rejected(auth_client, monkeypatch):
+    from app.services import scanner
+
+    monkeypatch.setattr(scanner, "MAX_ZIP_ENTRIES", 3)
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w") as zf:
+        for i in range(4):
+            zf.writestr(f"f{i}.txt", "hello")
+    r = auth_client.post("/api/scans/upload", files={"file": ("many.zip", buf.getvalue(), "application/zip")})
+    assert r.status_code == 413 and "limit" in r.json()["detail"]

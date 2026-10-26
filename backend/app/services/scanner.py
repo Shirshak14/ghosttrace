@@ -7,7 +7,7 @@ import zipfile
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from ..config import get_settings
@@ -164,14 +164,34 @@ def scan_text_blob(text: str, label: str, source_type: str) -> ScanStats:
     return stats
 
 
+# Caps on what one uploaded zip may expand to, so a small archive can't tie the server up for minutes.
+MAX_ZIP_ENTRIES = 5000
+MAX_ZIP_TOTAL_BYTES = 200 * 1024 * 1024
+
+
+class UploadTooLarge(ValueError):
+    pass
+
+
 def scan_upload(filename: str, data: bytes) -> ScanStats:
     stats = ScanStats()
     if filename.lower().endswith(".zip"):
         with zipfile.ZipFile(io.BytesIO(data)) as zf:
-            for info in zf.infolist():
-                if info.is_dir() or info.file_size > MAX_FILE_BYTES or should_skip_path(info.filename):
+            entries = [i for i in zf.infolist() if not i.is_dir()]
+            if len(entries) > MAX_ZIP_ENTRIES:
+                raise UploadTooLarge(f"The zip holds {len(entries):,} files; the limit is {MAX_ZIP_ENTRIES:,}.")
+            total = 0
+            for info in entries:
+                if info.file_size > MAX_FILE_BYTES or should_skip_path(info.filename):
                     continue
-                content = zf.read(info)
+                total += info.file_size
+                if total > MAX_ZIP_TOTAL_BYTES:
+                    raise UploadTooLarge(f"The zip expands to more than {MAX_ZIP_TOTAL_BYTES // (1024 * 1024)} MB of text.")
+                # Read at most the declared size plus one byte, so an entry that lies about its size is cut off.
+                with zf.open(info) as fh:
+                    content = fh.read(MAX_FILE_BYTES + 1)
+                if len(content) > MAX_FILE_BYTES:
+                    continue
                 if looks_binary(content):
                     continue
                 stats.files += 1
@@ -189,15 +209,9 @@ def scan_upload(filename: str, data: bytes) -> ScanStats:
 # ---------------------------------------------------------------- persistence
 
 def persist_hits(db: Session, scan: Scan, hits: list[RawHit]) -> list[Finding]:
+    """Save a scan's hits. A secret already known at the same location (fingerprint + repository) updates that row
+    instead of adding another, so re-scans and monitors don't multiply findings or reopen triaged ones."""
     now = _now()
-    # Only the columns needed to carry triage state and first-seen dates forward; the oldest row per fingerprint wins.
-    prior: dict[str, tuple[str, datetime]] = {
-        fp: (status, first_seen)
-        for fp, status, first_seen in db.execute(
-            select(Finding.fingerprint, Finding.status, Finding.first_seen)
-            .where(Finding.user_id == scan.user_id).order_by(Finding.first_seen.desc())
-        )
-    }
 
     unique: list[RawHit] = []
     seen: set[tuple[str, str | None]] = set()
@@ -206,6 +220,18 @@ def persist_hits(db: Session, scan: Scan, hits: list[RawHit]) -> list[Finding]:
         if key not in seen:
             seen.add(key)
             unique.append(h)
+
+    fingerprints = {h.match.fingerprint for h in unique}
+    existing: dict[tuple[str, str | None], Finding] = {}
+    # The same secret elsewhere (another repo or paste) passes on a false-positive verdict and its first-seen date.
+    prior: dict[str, tuple[str, datetime]] = {}
+    if fingerprints:
+        for f in db.scalars(
+            select(Finding).where(Finding.user_id == scan.user_id, Finding.fingerprint.in_(fingerprints))
+            .order_by(Finding.first_seen.desc())
+        ):
+            existing.setdefault((f.fingerprint, f.repository), f)
+            prior[f.fingerprint] = (f.status, f.first_seen)
 
     scores = score_all([
         (FindingContext(
@@ -219,22 +245,65 @@ def persist_hits(db: Session, scan: Scan, hits: list[RawHit]) -> list[Finding]:
     findings: list[Finding] = []
     for h, s in zip(unique, scores):
         m = h.match
-        prev_status, prev_first_seen = prior.get(m.fingerprint, (None, None))
-        f = Finding(
-            user_id=scan.user_id, scan_id=scan.id, credential_type=m.rule.name, category=m.rule.category, rule_id=m.rule.id,
-            secret_masked=mask_secret(m.secret, m.rule.category), fingerprint=m.fingerprint, source_type=h.source_type,
-            repository=h.repository, file_path=h.file_path, line_number=m.line, commit_sha=h.commit_sha, url=h.url,
-            snippet=m.snippet, in_history_only=h.history_only, entropy=m.entropy, confidence=s.confidence,
-            risk_score=s.risk, severity=s.severity, risk_factors=s.factors,
-            status="false_positive" if prev_status == "false_positive" else "open",
-            first_seen=prev_first_seen or now, last_seen=now,
+        current = dict(
+            scan_id=scan.id, credential_type=m.rule.name, category=m.rule.category, rule_id=m.rule.id,
+            secret_masked=mask_secret(m.secret, m.rule.category), source_type=h.source_type, file_path=h.file_path,
+            line_number=m.line, commit_sha=h.commit_sha, url=h.url, snippet=m.snippet, in_history_only=h.history_only,
+            entropy=m.entropy, confidence=s.confidence, risk_score=s.risk, severity=s.severity, risk_factors=s.factors,
+            last_seen=now,
         )
-        db.add(f)
+        f = existing.get((m.fingerprint, h.repository))
+        if f is not None:
+            for k, v in current.items():
+                setattr(f, k, v)
+        else:
+            prev_status, prev_first_seen = prior.get(m.fingerprint, (None, None))
+            f = Finding(
+                user_id=scan.user_id, fingerprint=m.fingerprint, repository=h.repository, **current,
+                status="false_positive" if prev_status == "false_positive" else "open",
+                first_seen=prev_first_seen or now,
+            )
+            db.add(f)
         findings.append(f)
     scan.findings_count = len(findings)
     scan.max_risk = max((f.risk_score for f in findings), default=0.0)
     db.commit()
     return findings
+
+
+def dedupe_findings(db: Session) -> int:
+    """One-off cleanup for databases written before persist_hits upserted: keep the newest row per
+    (user, fingerprint, repository), with the earliest first_seen and the strongest triage verdict. Returns rows removed."""
+    groups = db.execute(
+        select(Finding.user_id, Finding.fingerprint, Finding.repository)
+        .group_by(Finding.user_id, Finding.fingerprint, Finding.repository).having(func.count(Finding.id) > 1)
+    ).all()
+    rank = {"false_positive": 2, "resolved": 1, "open": 0}
+    removed = 0
+    for user_id, fingerprint, repository in groups:
+        repo_match = Finding.repository.is_(None) if repository is None else Finding.repository == repository
+        rows = list(db.scalars(
+            select(Finding).where(Finding.user_id == user_id, Finding.fingerprint == fingerprint, repo_match)
+            .order_by(Finding.id.desc())
+        ))
+        keep, extra = rows[0], rows[1:]
+        keep.first_seen = min(r.first_seen for r in rows)
+        keep.status = max((r.status for r in rows), key=lambda st: rank.get(st, 0))
+        for r in extra:
+            db.delete(r)
+        removed += len(extra)
+    db.commit()
+    return removed
+
+
+def fail_interrupted_scans(db: Session) -> int:
+    """Scans run in-process, so any still queued or running at startup died with the previous process."""
+    stuck = list(db.scalars(select(Scan).where(Scan.status.in_(["queued", "running"]))))
+    for scan in stuck:
+        scan.status, scan.finished_at, scan.message = "failed", _now(), "Scan interrupted"
+        scan.error = "The server restarted while this scan was running. Start it again."
+    db.commit()
+    return len(stuck)
 
 
 def run_github_scan(scan_id: int, include_history: bool = True) -> None:
